@@ -1,0 +1,70 @@
+;
+; Keystone.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=USBDevice
+ClassGuid={88BAE032-5A81-49f0-BC3D-A4FF138216D6}
+Provider=%ManufacturerName%
+CatalogFile=Keystone.cat
+DriverVer=
+PnpLockDown=1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+Keystone.sys  = 1,,
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
+
+[Standard.NT$ARCH$.10.0...16299]
+%Keystone.DeviceDesc%=Keystone_Device, USB\VID_05AC&PID_12AB
+
+[Keystone_Device.NT]
+CopyFiles=File_Copy
+
+[File_Copy]
+Keystone.sys
+
+[Keystone_Device.NT.HW]
+AddReg=Keystone_AddReg
+
+[Keystone_AddReg]
+; By default, USBDevice class uses iProduct descriptor to name the device
+; Uncomment for this device to use %Keystone.DeviceDesc%
+;HKR,,FriendlyName,,%Keystone.DeviceDesc%
+
+;-------------- Service installation
+[Keystone_Device.NT.Services]
+AddService = Keystone,%SPSVCINST_ASSOCSERVICE%, Keystone_Service_Inst
+
+; -------------- Keystone driver install sections
+[Keystone_Service_Inst]
+DisplayName    = %Keystone.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\Keystone.sys
+
+[Keystone_Device.NT.Wdf]
+KmdfService =  Keystone, Keystone_wdfsect
+
+[Keystone_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ManufacturerName="iUtils" 
+DiskName = "Keystone Installation Disk"
+Keystone.DeviceDesc = "Keystone Device"
+Keystone.SVCDESC = "Keystone Service"

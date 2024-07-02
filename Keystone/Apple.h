@@ -1,0 +1,42 @@
+#ifndef APPLE_H
+#define APPLE_H
+
+#define APPLE_VEND_SPECIFIC_SET_MODE 0x52
+
+//TODO: maybe programatically generate?
+
+//for ptp interface
+#define USB_DEVICE_SUBCLASS_STILL_IMAGE_CAPTURE 1
+#define USB_DEVICE_PROTOCOL_PTP 1
+extern CONST PWCHAR APPLE_PTP_DEVICE_ID;
+extern CONST PWCHAR APPLE_PTP_COMPAT_IDS[6];
+//usbmux interface
+#define APPLE_USBMUX_SUBCLASS 254
+#define APPLE_USBMUX_PROTOCOL 2
+extern CONST PWCHAR APPLE_USBMUX_DEVICE_ID;
+extern CONST PWCHAR APPLE_USBMUX_COMPAT_IDS[6];
+	
+//valeria
+#define APPLE_VALERIA_SUBCLASS 42
+#define APPLE_VALERIA_PROTOCOL 255
+
+//for network interface
+#define USB_DEVICE_SUBCLASS_CDC_NCM 0xD
+#define USB_DEVICE_SUBCLASS_CDC_DATA 0
+
+
+NTSTATUS SetAppleMode(
+	INOUT PIU_DEVICE Dev,
+	IN APPLE_CONNECTION_MODE Mode
+);
+
+NTSTATUS GetAppleMode(
+	IN PIU_DEVICE Dev,
+	OUT PAPPLE_CONNECTION_MODE Mode
+);
+
+UCHAR GetDesiredConfigurationFromAppleMode(
+	APPLE_CONNECTION_MODE Mode
+);
+
+#endif
