@@ -3,17 +3,14 @@
 #include "driver.h"
 #include "child.h"
 
-NTSTATUS UrbHandleDispatch(
-	PIU_CHILD_DEVICE Dev,
-	PIRP Irp
+VOID UrbCompleteDispatch(
+	WDFREQUEST Request
 );
 
-NTSTATUS UrbHandleGetDescriptorfromDevice(
-	PIU_CHILD_DEVICE Dev,
-	PURB Urb
+VOID UrbCompleteGetDescriptorfromDevice(
+	WDFREQUEST Request
 );
 
-NTSTATUS UrbHandleSetConfiguration(
-	PIU_CHILD_DEVICE Dev,
-	PURB Urb
+VOID UrbCompleteSetConfiguration(
+	WDFREQUEST Request
 );

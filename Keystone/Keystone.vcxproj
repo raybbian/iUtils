@@ -24,8 +24,9 @@
     <ClCompile Include="Configuration.c" />
     <ClCompile Include="Device.c" />
     <ClCompile Include="Driver.c" />
-    <ClCompile Include="ChildIo.c" />
+    <ClCompile Include="ChildQueue.c" />
     <ClCompile Include="Functions.c" />
+    <ClCompile Include="Queue.c" />
     <ClCompile Include="UrbHandle.c" />
     <ClCompile Include="UrbSend.c" />
   </ItemGroup>
@@ -38,7 +39,8 @@
     <ClInclude Include="Functions.h" />
     <ClInclude Include="Public.h" />
     <ClInclude Include="Log.h" />
-    <ClInclude Include="ChildIo.h" />
+    <ClInclude Include="ChildQueue.h" />
+    <ClInclude Include="Queue.h" />
     <ClInclude Include="UrbHandle.h" />
     <ClInclude Include="UrbSend.h" />
   </ItemGroup>

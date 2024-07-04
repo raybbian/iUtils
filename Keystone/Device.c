@@ -1,4 +1,5 @@
 #include "driver.h"
+#include "queue.h"
 #include "configuration.h"
 #include "apple.h"
 #include "log.h"
@@ -16,9 +17,8 @@ NTSTATUS KeystoneCreateDevice(
 	NTSTATUS status;
 	PAGED_CODE();
 
-	//Set come properties
-	WdfDeviceInitSetDeviceType(DeviceInit, FILE_DEVICE_BUS_EXTENDER);
-	// exclusive?
+	// we forward all requests to this queue (usually from the child pdos) down
+	WdfFdoInitSetFilter(DeviceInit);
 
 	WDF_PNPPOWER_EVENT_CALLBACKS pnpPowerCallbacks;
 	WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpPowerCallbacks);
@@ -48,7 +48,11 @@ NTSTATUS KeystoneCreateDevice(
 	dev->Self = device;
 	//TODO: init private fields
 
-	//FDO queue? for user app maybe interface
+	status = KeystoneQueueInitialize(device);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Failed to create queue!");
+		return status;
+	}
 
 	status = WdfDeviceCreateDeviceInterface(
 		device,

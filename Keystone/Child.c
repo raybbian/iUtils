@@ -1,7 +1,7 @@
 #include "child.h"
 #include "apple.h"
 #include "log.h"
-#include "childio.h"
+#include "childqueue.h"
 #include "functions.h"
 
 VOID KeystoneChildListInitialize(
@@ -59,6 +59,8 @@ NTSTATUS KeystoneEvtChildListCreateDevice(
 ) {
 	NTSTATUS status = STATUS_SUCCESS;
 	UNREFERENCED_PARAMETER(ChildList);
+
+	WdfPdoInitAllowForwardingRequestToParent(ChildInit);
 
 	WDFDEVICE DeviceObject = WdfChildListGetDevice(ChildList);
 	PIU_DEVICE Dev = DeviceGetContext(DeviceObject);

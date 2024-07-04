@@ -1,4 +1,4 @@
-#include "childio.h"
+#include "childqueue.h"
 #include "log.h"
 #include "child.h"
 #include "urbhandle.h"
@@ -20,10 +20,9 @@ NTSTATUS KeystoneChildQueueInitialize(
 		WdfIoQueueDispatchParallel
 	);
 
-	queueConfig.EvtIoRead = KeystoneChildEvtIoRead;
-	queueConfig.EvtIoWrite = KeystoneChildEvtIoWrite;
 	queueConfig.EvtIoDeviceControl = KeystoneChildEvtIoDeviceControl;
 	queueConfig.EvtIoInternalDeviceControl = KeystoneChildEvtIoInternalDeviceControl;
+	queueConfig.EvtIoDefault = KeystoneChildEvtIoDefault;
 	queueConfig.EvtIoStop = KeystoneChildEvtIoStop;
 
 	WDFQUEUE queue;
@@ -43,28 +42,13 @@ NTSTATUS KeystoneChildQueueInitialize(
 	return status;
 }
 
-VOID KeystoneChildEvtIoRead(
+VOID KeystoneChildEvtIoDefault(
 	WDFQUEUE Queue,
-	WDFREQUEST Request,
-	size_t Length
+	WDFREQUEST Request
 ) {
 	UNREFERENCED_PARAMETER(Queue);
-	LOG_INFO("Read request length %d", (int)Length);
-
-	WdfRequestComplete(Request, STATUS_SUCCESS);
-	return;
-}
-
-VOID KeystoneChildEvtIoWrite(
-	WDFQUEUE Queue,
-	WDFREQUEST Request,
-	size_t Length
-) {
-	UNREFERENCED_PARAMETER(Queue);
-	LOG_INFO("Write request length %d", (int)Length);
-
-	WdfRequestComplete(Request, STATUS_SUCCESS);
-	return;
+	LOG_INFO("Default io handle");
+	ForwardRequestToParent(Request);
 }
 
 VOID KeystoneChildEvtIoDeviceControl(
@@ -75,12 +59,9 @@ VOID KeystoneChildEvtIoDeviceControl(
 	IN ULONG IoControlCode
 ) {
 	UNREFERENCED_PARAMETER(Queue);
-	//This event is invoked when the framework receives IRP_MJ_DEVICE_CONTROL request.
 	LOG_INFO("IoDeviceControl OutputBufferLength % d InputBufferLength % d IoControlCode % d",
 		(int)OutputBufferLength, (int)InputBufferLength, IoControlCode);
-
-	WdfRequestComplete(Request, STATUS_SUCCESS);
-	return;
+	ForwardRequestToParent(Request);
 }
 
 VOID KeystoneChildEvtIoInternalDeviceControl(
@@ -90,24 +71,20 @@ VOID KeystoneChildEvtIoInternalDeviceControl(
 	IN size_t InputBufferLength,
 	IN ULONG IoControlCode
 ) {
-	NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
-	PIU_CHILD_DEVICE Dev = ChildDeviceGetContext(WdfIoQueueGetDevice(Queue));
+	UNREFERENCED_PARAMETER(Queue);
 	UNREFERENCED_PARAMETER(InputBufferLength);
 	UNREFERENCED_PARAMETER(OutputBufferLength);
 
 	switch (IoControlCode) {
 	case IOCTL_INTERNAL_USB_SUBMIT_URB: {
-		PIRP irp = WdfRequestWdmGetIrp(Request);
-		status = UrbHandleDispatch(Dev, irp);
+		UrbCompleteDispatch(Request);
 		break;
 	}
 	default:
 		LOG_ERROR("IOCTL %u not implemented yet!", IoControlCode);
+		ForwardRequestToParent(Request);
 		break;
 	}
-
-	WdfRequestComplete(Request, status);
-	return;
 }
 
 VOID KeystoneChildEvtIoStop(
@@ -145,11 +122,19 @@ VOID KeystoneChildEvtIoStop(
 	return;
 }
 
-NTSTATUS ForwardIRPToParent(
-	IN PIU_CHILD_DEVICE Dev,
-	IN PIRP Irp
+VOID ForwardRequestToParent(
+	WDFREQUEST Request
 ) {
-	LOG_INFO("irp forwarded");
-	IoSkipCurrentIrpStackLocation(Irp);
-	return IoCallDriver(Dev->Parent->WDM.NextStackDevice, Irp);
+	WDFDEVICE ParentDev = WdfPdoGetParent(WdfIoQueueGetDevice(WdfRequestGetIoQueue(Request)));
+	WDF_REQUEST_FORWARD_OPTIONS options;
+	WDF_REQUEST_FORWARD_OPTIONS_INIT(&options); // send and forget
+	NTSTATUS status = WdfRequestForwardToParentDeviceIoQueue(Request, WdfDeviceGetDefaultQueue(ParentDev), &options);
+	if (!NT_SUCCESS(status)) 
+		WdfRequestComplete(Request, status);
+}
+
+VOID RequestIsUnsupported(
+	WDFREQUEST Request
+) {
+	WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 }

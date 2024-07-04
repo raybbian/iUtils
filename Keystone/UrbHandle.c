@@ -3,121 +3,129 @@
 #include "child.h"
 #include "log.h"
 #include "urbsend.h"
-#include "childio.h"
+#include "childqueue.h"
 
-NTSTATUS UrbHandleDispatch(
-	PIU_CHILD_DEVICE Dev,
-	PIRP Irp
+VOID UrbCompleteDispatch(
+	WDFREQUEST Request
 ) {
+	PIRP Irp = WdfRequestWdmGetIrp(Request);
 	PIO_STACK_LOCATION irpStack = IoGetCurrentIrpStackLocation(Irp);
 	PURB Urb = (PURB)irpStack->Parameters.Others.Argument1;
-	NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
-	LOG_INFO("URB Function: %d", Urb->UrbHeader.Function);
 
 	switch (Urb->UrbHeader.Function) {
 	case URB_FUNCTION_SELECT_CONFIGURATION:
-		status = UrbHandleSetConfiguration(Dev, Urb);
 		LOG_INFO("handled set config");
+		UrbCompleteSetConfiguration(Request);
 		break;
 	case URB_FUNCTION_SELECT_INTERFACE:
 		LOG_INFO("need to select and return interface handle?");
+		RequestIsUnsupported(Request);
 		break;
 	case URB_FUNCTION_ABORT_PIPE:
 		LOG_INFO("need to clear and cancel any transformations going back");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_GET_CURRENT_FRAME_NUMBER:
 		LOG_INFO("need to return current frame number (passthrough?)");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_CONTROL_TRANSFER:
 	case URB_FUNCTION_CONTROL_TRANSFER_EX:
 		LOG_INFO("need to process and make control transfer target child");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER:
-		LOG_INFO("need to forward bulk/interrupt transfer (multiplex)");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_ISOCH_TRANSFER:
 		LOG_INFO("no? need to handle isoch");
+		RequestIsUnsupported(Request);
 		break;
 	case URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL:
 		LOG_INFO("Need to handle resetting of pipe, data toggle, etc.");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_SYNC_CLEAR_STALL:
 	case URB_FUNCTION_SYNC_RESET_PIPE:
 		LOG_INFO("usually used for defective device.. required?");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE:
-		status = UrbHandleGetDescriptorfromDevice(Dev, Urb);
+		UrbCompleteGetDescriptorfromDevice(Request);
 		LOG_INFO("returned descriptor!");
 		break;
 	case URB_FUNCTION_GET_DESCRIPTOR_FROM_ENDPOINT:
 		LOG_INFO("return endpoint descriptor");
+		RequestIsUnsupported(Request);
 		break;
 	case URB_FUNCTION_GET_DESCRIPTOR_FROM_INTERFACE:
 		LOG_INFO("return interface descriptor");
+		RequestIsUnsupported(Request);
 		break;
 	case URB_FUNCTION_SET_DESCRIPTOR_TO_DEVICE:
 	case URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE:
 	case URB_FUNCTION_SET_DESCRIPTOR_TO_ENDPOINT:
 		LOG_INFO("allow setting descriptors?");
+		RequestIsUnsupported(Request);
 		break;
 	case URB_FUNCTION_SET_FEATURE_TO_DEVICE:
 	case URB_FUNCTION_SET_FEATURE_TO_INTERFACE:
 	case URB_FUNCTION_SET_FEATURE_TO_ENDPOINT:
 	case URB_FUNCTION_SET_FEATURE_TO_OTHER:
 		LOG_INFO("allow set feature?");
+		RequestIsUnsupported(Request);
 		break;
 	case URB_FUNCTION_CLEAR_FEATURE_TO_DEVICE:
 	case URB_FUNCTION_CLEAR_FEATURE_TO_INTERFACE:
 	case URB_FUNCTION_CLEAR_FEATURE_TO_ENDPOINT:
 	case URB_FUNCTION_CLEAR_FEATURE_TO_OTHER:
 		LOG_INFO("allow clear feature?");
+		RequestIsUnsupported(Request);
 		break;
 	case URB_FUNCTION_GET_STATUS_FROM_DEVICE:
 	case URB_FUNCTION_GET_STATUS_FROM_INTERFACE:
 	case URB_FUNCTION_GET_STATUS_FROM_ENDPOINT:
 	case URB_FUNCTION_GET_STATUS_FROM_OTHER:
 		LOG_INFO("forward get status request?");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_VENDOR_DEVICE:
 	case URB_FUNCTION_VENDOR_INTERFACE:
 	case URB_FUNCTION_VENDOR_ENDPOINT:
 	case URB_FUNCTION_VENDOR_OTHER:
 		LOG_INFO("Forwarding vendor urb");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_GET_CONFIGURATION:
 	case URB_FUNCTION_GET_INTERFACE:
 		LOG_INFO("return proper values");
-		ForwardIRPToParent(Dev, Irp);
+		ForwardRequestToParent(Request);
 		break;
 	case URB_FUNCTION_GET_MS_FEATURE_DESCRIPTOR:
 		LOG_INFO("return ms feature descriptor");
+		RequestIsUnsupported(Request);
 		break;
 	default:
 		LOG_INFO("unrecognized URB has been sent!");
+		RequestIsUnsupported(Request);
 		break;
 	}
-
-	return status;
 }
 
-NTSTATUS UrbHandleGetDescriptorfromDevice(
-	PIU_CHILD_DEVICE Dev,
-	PURB Urb
+VOID UrbCompleteGetDescriptorfromDevice(
+	WDFREQUEST Request
 ) {
 	NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
+	PIU_CHILD_DEVICE Dev = ChildDeviceGetContext(WdfIoQueueGetDevice(WdfRequestGetIoQueue(Request)));
+	PIRP Irp = WdfRequestWdmGetIrp(Request);
+	PURB Urb = (PURB)IoGetCurrentIrpStackLocation(Irp)->Parameters.Others.Argument1;
+
 	ULONG transferBufferSz = Urb->UrbControlDescriptorRequest.TransferBufferLength;
 	PVOID transferBuffer = Urb->UrbControlDescriptorRequest.TransferBuffer;
 	if (!transferBuffer) {
 		LOG_ERROR("MDL (DMA?) not implemented yet!");
-		return status;
+		ForwardRequestToParent(Request);
+		return;
 	}
 
 	switch (Urb->UrbControlDescriptorRequest.DescriptorType) {
@@ -143,18 +151,22 @@ NTSTATUS UrbHandleGetDescriptorfromDevice(
 		LOG_INFO("Unsupported get descriptor from device %d", Urb->UrbControlDescriptorRequest.DescriptorType);
 		break;
 	}
-	return status;
+	WdfRequestComplete(Request, status);
 }
 
-NTSTATUS UrbHandleSetConfiguration(
-	PIU_CHILD_DEVICE Dev,
-	PURB Urb
+VOID UrbCompleteSetConfiguration(
+	WDFREQUEST Request
 ) {
 	NTSTATUS status = STATUS_SUCCESS;
+	PIU_CHILD_DEVICE Dev = ChildDeviceGetContext(WdfIoQueueGetDevice(WdfRequestGetIoQueue(Request)));
+	PIRP Irp = WdfRequestWdmGetIrp(Request);
+	PURB Urb = (PURB)IoGetCurrentIrpStackLocation(Irp)->Parameters.Others.Argument1;
+
 	PUSB_CONFIGURATION_DESCRIPTOR desc = Urb->UrbSelectConfiguration.ConfigurationDescriptor;
 	if (!desc || desc->bConfigurationValue != Dev->Parent->Config.Descriptor->bConfigurationValue) {
 		LOG_ERROR("Child cannot change configuration of parent!");
-		return STATUS_UNSUCCESSFUL;
+		status = STATUS_UNSUCCESSFUL;
+		goto Cleanup;
 	}
 	USBD_INTERFACE_INFORMATION* curIntf = (USBD_INTERFACE_INFORMATION*)&Urb->UrbSelectConfiguration.Interface;
 
@@ -163,7 +175,8 @@ NTSTATUS UrbHandleSetConfiguration(
 		UCHAR intfNum = curIntf->InterfaceNumber;
 		if (intfNum > IU_MAX_NUMBER_OF_INTERFACES) {
 			LOG_ERROR("intfnum child requested is too high");
-			return STATUS_NO_MORE_ENTRIES;
+			status = STATUS_NO_MORE_ENTRIES;
+			goto Cleanup;
 		}
 
 		if (curIntf->AlternateSetting != Dev->Parent->Config.InterfaceAltsetting[intfNum]) {
@@ -172,7 +185,7 @@ NTSTATUS UrbHandleSetConfiguration(
 			status = SetInterface(Dev->Parent, intfNum, curIntf->AlternateSetting);
 			if (!NT_SUCCESS(status)) {
 				LOG_ERROR("Failed to change interface as requested by child");
-				status;
+				goto Cleanup;
 			}
 		}
 
@@ -183,7 +196,8 @@ NTSTATUS UrbHandleSetConfiguration(
 		);
 		if (!parentIntfDesc) {
 			LOG_ERROR("Selected interface does not exist on this configuration");
-			return STATUS_UNSUCCESSFUL;
+			status = STATUS_UNSUCCESSFUL;
+			goto Cleanup;
 		}
 
 		//fill information requested (should matck)
@@ -206,14 +220,17 @@ NTSTATUS UrbHandleSetConfiguration(
 			);
 			if (!endpointDesc) {
 				LOG_ERROR("Interface mismatched number of endpoints");
-				return STATUS_BAD_DATA;
+				status = STATUS_BAD_DATA;
+				goto Cleanup;
 			}
 			UCHAR pipeNum = endpointDesc->bEndpointAddress & 0x0F;
 			curIntf->Pipes[j] = Dev->Parent->Config.Pipes[pipeNum];
 			startP = (PUCHAR)endpointDesc + endpointDesc->bLength;
 		}
 	}
+
 	LOG_INFO("Child got configs");
 	Urb->UrbSelectConfiguration.ConfigurationHandle = Dev->Parent->Config.Handle;
-	return status;
+Cleanup:
+	WdfRequestComplete(Request, status);
 }
