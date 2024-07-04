@@ -2,27 +2,8 @@
 #include "apple.h"
 #include "configuration.h"
 #include "log.h"
-#include "usbdrequest.h"
+#include "urbsend.h"
 
-CONST PWCHAR APPLE_PTP_DEVICE_ID = L"USB\\VID_05AC&PID_12AB&MI_00";
-CONST PWCHAR APPLE_PTP_COMPAT_IDS[6] = {
-	L"USB\\COMPAT_VID_05ac&Class_06&SubClass_01&Prot_01",
-	L"USB\\COMPAT_VID_05ac&Class_06&SubClass_01",
-	L"USB\\COMPAT_VID_05ac&Class_06",
-	L"USB\\Class_06&SubClass_01&Prot_01",
-	L"USB\\Class_06&SubClass_01",
-	L"USB\\Class_06",
-};
-
-CONST PWCHAR APPLE_USBMUX_DEVICE_ID = L"USB\\VID_05AC&PID_12AB&MI_01";
-CONST PWCHAR APPLE_USBMUX_COMPAT_IDS[6] = {
-	L"USB\\COMPAT_VID_05ac&Class_ff&SubClass_fe&Prot_02",
-	L"USB\\COMPAT_VID_05ac&Class_ff&SubClass_fe",
-	L"USB\\COMPAT_VID_05ac&Class_ff",
-	L"USB\\Class_ff&SubClass_fe&Prot_02",
-	L"USB\\Class_ff&SubClass_fe",
-	L"USB\\Class_ff",
-};
 
 NTSTATUS SetAppleMode(
 	INOUT PIU_DEVICE Dev,
@@ -31,8 +12,7 @@ NTSTATUS SetAppleMode(
 	NTSTATUS status = STATUS_SUCCESS;
 
 	LOG_INFO("Trying to set apple device into new mode: %d", Mode);
-	APPLE_CONNECTION_MODE curMode;
-	status = GetAppleMode(Dev, &curMode);
+	APPLE_CONNECTION_MODE curMode = GetAppleMode(Dev);
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Failed to get current mode, continuing anyways");
 	}
@@ -54,7 +34,7 @@ NTSTATUS SetAppleMode(
 	urb.UrbControlVendorClassRequest.Value = (USHORT)0;
 	urb.UrbControlVendorClassRequest.Index = (USHORT)Mode;
 
-	status = SendUSBDRequest(Dev, &urb);
+	status = SendUrbSync(Dev, &urb);
 	if (!NT_SUCCESS(status) || !USBD_SUCCESS(urb.UrbHeader.Status)) {
 		LOG_ERROR("Request failed");
 		return status;
@@ -69,32 +49,35 @@ NTSTATUS SetAppleMode(
 	return status;
 }
 
-NTSTATUS GetAppleMode(
-	IN PIU_DEVICE Dev,
-	OUT PAPPLE_CONNECTION_MODE Mode
+APPLE_CONNECTION_MODE GetAppleMode(
+	IN PIU_DEVICE Dev
 ) {
-	NTSTATUS ntStatus = STATUS_SUCCESS;
+	NTSTATUS status = STATUS_SUCCESS;
+	APPLE_CONNECTION_MODE out;
 	if (Dev->DeviceDescriptor.bNumConfigurations <= 4) {
-		*Mode = APPLE_MODE_INITIAL;
-		goto Complete;
+		out = APPLE_MODE_INITIAL;
+		goto Cleanup;
 	}
 	if (Dev->DeviceDescriptor.bNumConfigurations > 5) {
-		*Mode = APPLE_MODE_UNKNOWN;
-		goto Complete;
+		out = APPLE_MODE_UNKNOWN;
+		goto Cleanup;
 	}
 
-	UCHAR buf[IU_MAX_CONFIGURATION_DESCRIPTOR_LENGTH];
 	ULONG configLen;
-	UCHAR index;
-	ntStatus = GetConfigDescriptorByValue(Dev, buf, sizeof(buf), 5, &configLen, &index);
-	if (!NT_SUCCESS(ntStatus)) {
+	UCHAR buf[IU_MAX_CONFIGURATION_BUFFER_SIZE];
+	status = GetConfigDescriptorByValue(Dev, buf, sizeof(buf), 5, &configLen);
+	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Could not get configuration descriptor 5 for query apple mode");
-		*Mode = APPLE_MODE_UNKNOWN;
-		goto Complete;
+		out = APPLE_MODE_UNKNOWN;
+		goto Cleanup;
+	}
+	if (((PUSB_CONFIGURATION_DESCRIPTOR)buf)->wTotalLength > IU_MAX_CONFIGURATION_BUFFER_SIZE) {
+		LOG_ERROR("Device config is too big!");
+		out = APPLE_MODE_UNKNOWN;
+		goto Cleanup;
 	}
 
 	PUSB_CONFIGURATION_DESCRIPTOR confDesc = (PUSB_CONFIGURATION_DESCRIPTOR)buf;
-
 	PUSB_INTERFACE_DESCRIPTOR cdcNcm = USBD_ParseConfigurationDescriptorEx(
 		confDesc,
 		confDesc,
@@ -125,17 +108,17 @@ NTSTATUS GetAppleMode(
 		APPLE_VALERIA_PROTOCOL
 	);
 
-	if (valeria && usbMux) 
-		*Mode = APPLE_MODE_VALERIA;
-	else if (cdcNcm && usbMux) 
-		*Mode = APPLE_MODE_NETWORK;
-	else 
-		*Mode = APPLE_MODE_UNKNOWN;
+	if (valeria && usbMux)
+		out = APPLE_MODE_VALERIA;
+	else if (cdcNcm && usbMux)
+		out = APPLE_MODE_NETWORK;
+	else
+		out = APPLE_MODE_UNKNOWN;
 
-Complete:
-	Dev->AppleMode = *Mode;
-	LOG_INFO("Device is in apple mode %d", *Mode);
-	return ntStatus;
+Cleanup:
+	Dev->AppleMode = out;
+	LOG_INFO("Device is in apple mode %d", out);
+	return out;
 }
 
 UCHAR GetDesiredConfigurationFromAppleMode(
@@ -147,9 +130,8 @@ UCHAR GetDesiredConfigurationFromAppleMode(
 		return 5;
 	case APPLE_MODE_INITIAL:
 		return 4;
-	case APPLE_MODE_UNKNOWN:
-		return 1;
 	default:
+		LOG_INFO("Getting desired configuration for bad mode");
 		return 0;
 	}
 }

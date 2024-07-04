@@ -1,7 +1,5 @@
 #pragma once
 
-#define IU_MAX_CONFIGURATION_DESCRIPTOR_LENGTH 512
-
 //Must get and parse configuration like this because wdf doesn't even have wdm shit
 
 NTSTATUS GetCurrentConfiguration(
@@ -23,8 +21,7 @@ NTSTATUS GetConfigDescriptorByValue(
 	OUT PVOID Buffer,
 	IN ULONG Size,
 	IN UCHAR Value,
-	OUT PULONG Received,
-	OUT PUCHAR Index
+	OUT PULONG Received
 );
 
 NTSTATUS UnsetConfiguration(
@@ -34,4 +31,20 @@ NTSTATUS UnsetConfiguration(
 NTSTATUS SetConfigurationByValue(
 	INOUT PIU_DEVICE Dev,
 	IN UCHAR Value
+);
+
+NTSTATUS SetInterface(
+	PIU_DEVICE Dev,
+	UCHAR InterfaceNumber,
+	UCHAR Altsetting
+);
+
+NTSTATUS UpdateConfigurationFromInterfaceList(
+	PIU_DEVICE Dev,
+	PUSBD_INTERFACE_LIST_ENTRY InterfaceList //after calling set interface
+);
+
+NTSTATUS UpdateInterfaceFromInterfaceEntry(
+	PIU_DEVICE Dev,
+	PUSBD_INTERFACE_LIST_ENTRY InterfaceEntry
 );

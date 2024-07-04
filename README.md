@@ -34,32 +34,20 @@ This is the user application that will allow the user to:
 
 ## What iUtilities Offers
 
-These are some applications that become possible, based on this driver's functionality.
+These are some applications that become possible, based on this driver's functionality:
 
-### Monitor Mirroring/Extending to iDevice
+- **Monitor Mirroring/Extending to iDevice**: Using a USB-C cable and the hidden **Network** device mode, one can mirror/extend their screen to their iDevice using applications such as [Moonlight](https://moonlight-stream.org/) over "Ethernet" with virtually zero latency. One could experiment with sending raw video at lower resolutions, turning their iDevice into a true "extra monitor".
 
-Using a USB-C cable and the hidden **Network** device mode, one can mirror/extend their screen to their iDevice using applications such as [Moonlight](https://moonlight-stream.org/) over "Ethernet" with virtually zero latency. One could experiment with sending raw video at lower resolutions, turning their iDevice into a true "extra monitor".
+- **Virtual Apple Capture Card**: Using the hidden **Valeria** device mode, one can record and share their iDevice's screen using applications such as [OBS](https://obsproject.com/) directly onto their PC without the need to store video on the iDevice.
 
-### Virtual Apple Capture Card
-
-Using the hidden **Valeria** device mode, one can record and share their iDevice's screen using applications such as [OBS](https://obsproject.com/) directly onto their PC without the need to store video on the iDevice.
-
-### Super Speed File Transfers
-
-Using the hidden **Network** device mode, one can set up a P2P connection and transfer files at speeds up to 3Gbps (375 Megabytes per second, much faster that 99% of home networks)!
+- **Super Speed File Transfers**: Using the hidden **Network** device mode, one can set up a P2P connection and transfer files at speeds up to 3Gbps (375 Megabytes per second, much faster that 99% of home networks)!
 
 ## What iUtilities Preserves
 
-Because iUtilities simply extends the capabilities of your iDevice, the following functionalities can still be used without issue.
+Because iUtilities simply extends the capabilities of your iDevice, the following functionalities can still be used without issue:
 
-### iTunes Backup and Communication
+- **Itunes Backup and Communication**: The USBMUX USB interface that Apple uses for iTunes and device communication is simply passed through to Apple's own driver.
 
-The USBMUX USB interface that Apple uses for iTunes and device communication is simply passed through to Apple's own driver.
+- **PTP Photo Transfer and Sharing**: The PTP USB interface is similary passed through to the Windows MTP driver - you can still share, access, and backup photos on your iDevice through your Windows machine.
 
-### PTP Photo Transfer and Sharing
-
-The PTP USB interface is similary passed through to the Windows MTP driver - you can still share, access, and backup photos on your iDevice through your Windows machine.
-
-### Charging Device
-
-A user's iDevice will still be able to charge normally.
+- **Charging Device**: A user's iDevice will still be able to charge normally.

@@ -1,25 +1,26 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
     <Filter Include="Header Files">
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
-    </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="Driver Files">
       <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
       <Extensions>inf;inv;inx;mof;mc;</Extensions>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="ReadMe.txt" />
+    <Filter Include="1. Communication w/ USB Stack Below">
+      <UniqueIdentifier>{a1d3523b-5283-4367-8d59-99c5eb0a97be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3. Core Driver Functionality">
+      <UniqueIdentifier>{c380e201-b83f-499f-880a-e5670d4786c4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="4. Communication w/ USB Stack Above">
+      <UniqueIdentifier>{61b4535a-c198-42fa-b7c9-f02d00211f59}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="2. User App Interface Communication">
+      <UniqueIdentifier>{a5811680-a371-41b9-a153-e75e3b0a070c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Inf Include="Keystone.inf">
@@ -27,49 +28,70 @@
     </Inf>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Device.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Driver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Public.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Log.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Configuration.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="USBDRequest.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Apple.h">
-      <Filter>Header Files</Filter>
+      <Filter>1. Communication w/ USB Stack Below</Filter>
     </ClInclude>
-    <ClInclude Include="Children.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="Configuration.h">
+      <Filter>1. Communication w/ USB Stack Below</Filter>
+    </ClInclude>
+    <ClInclude Include="UrbSend.h">
+      <Filter>1. Communication w/ USB Stack Below</Filter>
+    </ClInclude>
+    <ClInclude Include="Device.h">
+      <Filter>3. Core Driver Functionality</Filter>
+    </ClInclude>
+    <ClInclude Include="Driver.h">
+      <Filter>3. Core Driver Functionality</Filter>
+    </ClInclude>
+    <ClInclude Include="ChildIo.h">
+      <Filter>4. Communication w/ USB Stack Above</Filter>
+    </ClInclude>
+    <ClInclude Include="Child.h">
+      <Filter>3. Core Driver Functionality</Filter>
+    </ClInclude>
+    <ClInclude Include="Functions.h">
+      <Filter>3. Core Driver Functionality</Filter>
+    </ClInclude>
+    <ClInclude Include="UrbHandle.h">
+      <Filter>4. Communication w/ USB Stack Above</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Device.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Driver.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="Apple.c">
+      <Filter>1. Communication w/ USB Stack Below</Filter>
     </ClCompile>
     <ClCompile Include="Configuration.c">
-      <Filter>Source Files</Filter>
+      <Filter>1. Communication w/ USB Stack Below</Filter>
     </ClCompile>
-    <ClCompile Include="USBDRequest.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="UrbSend.c">
+      <Filter>1. Communication w/ USB Stack Below</Filter>
     </ClCompile>
-    <ClCompile Include="Apple.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="Device.c">
+      <Filter>3. Core Driver Functionality</Filter>
     </ClCompile>
-    <ClCompile Include="Children.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="Driver.c">
+      <Filter>3. Core Driver Functionality</Filter>
     </ClCompile>
+    <ClCompile Include="ChildIo.c">
+      <Filter>4. Communication w/ USB Stack Above</Filter>
+    </ClCompile>
+    <ClCompile Include="Child.c">
+      <Filter>3. Core Driver Functionality</Filter>
+    </ClCompile>
+    <ClCompile Include="Functions.c">
+      <Filter>3. Core Driver Functionality</Filter>
+    </ClCompile>
+    <ClCompile Include="UrbHandle.c">
+      <Filter>4. Communication w/ USB Stack Above</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
   </ItemGroup>
 </Project>

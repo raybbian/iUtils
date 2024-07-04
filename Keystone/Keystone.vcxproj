@@ -19,25 +19,28 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <None Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="Apple.c" />
-    <ClCompile Include="Children.c" />
+    <ClCompile Include="Child.c" />
     <ClCompile Include="Configuration.c" />
     <ClCompile Include="Device.c" />
     <ClCompile Include="Driver.c" />
-    <ClCompile Include="USBDRequest.c" />
+    <ClCompile Include="ChildIo.c" />
+    <ClCompile Include="Functions.c" />
+    <ClCompile Include="UrbHandle.c" />
+    <ClCompile Include="UrbSend.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Apple.h" />
-    <ClInclude Include="Children.h" />
+    <ClInclude Include="Child.h" />
     <ClInclude Include="Configuration.h" />
     <ClInclude Include="Device.h" />
     <ClInclude Include="Driver.h" />
+    <ClInclude Include="Functions.h" />
     <ClInclude Include="Public.h" />
     <ClInclude Include="Log.h" />
-    <ClInclude Include="USBDRequest.h" />
+    <ClInclude Include="ChildIo.h" />
+    <ClInclude Include="UrbHandle.h" />
+    <ClInclude Include="UrbSend.h" />
   </ItemGroup>
   <ItemGroup>
     <Inf Include="Keystone.inf" />
@@ -170,6 +173,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

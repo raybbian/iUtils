@@ -1,7 +1,7 @@
 #include "driver.h"
 #include "configuration.h"
 #include "log.h"
-#include "usbdrequest.h"
+#include "urbsend.h"
 
 NTSTATUS GetCurrentConfiguration(
 	IN PIU_DEVICE Dev,
@@ -19,7 +19,7 @@ NTSTATUS GetCurrentConfiguration(
 	urb.UrbControlGetConfigurationRequest.TransferBufferLength = 1;
 	urb.UrbControlGetConfigurationRequest.TransferBuffer = Configuration;
 
-	ntStatus = SendUSBDRequest(Dev, &urb);
+	ntStatus = SendUrbSync(Dev, &urb);
 	if (!NT_SUCCESS(ntStatus) || !USBD_SUCCESS(urb.UrbHeader.Status)) {
 		LOG_ERROR("Getting configuration failed: status: 0x%x, urb-status: 0x%x", ntStatus, urb.UrbHeader.Status);
 		*Ret = 0;
@@ -39,6 +39,7 @@ NTSTATUS GetConfigDescriptorByIndex(
 	OUT PULONG Received
 ) {
 	NTSTATUS ntStatus = STATUS_SUCCESS;
+		*Received = 0;
 
 	if (Dev->DeviceDescriptor.bLength == 0) {
 		LOG_ERROR("Cannot get configurations without device descriptor");
@@ -46,22 +47,12 @@ NTSTATUS GetConfigDescriptorByIndex(
 	}
 	if (Size < sizeof(USB_CONFIGURATION_DESCRIPTOR)) {
 		LOG_ERROR("Buffer size too small to get config descriptor");
-		*Received = 0;
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 	// if invalid index
 	if (Index < 0 || Index >= Dev->DeviceDescriptor.bNumConfigurations) {
 		LOG_ERROR("Invalid configuration index: OOB");
-		*Received = 0;
 		return STATUS_NO_MORE_ENTRIES;
-	}
-	// return cached config if it is active one
-	if (Dev->Config.Descriptor && Dev->Config.Index == Index) {
-		LOG_INFO("Returning cached config desc");
-		Size = Dev->Config.Descriptor->bLength; //only return the 9 bytes - we already have all the information
-		RtlCopyMemory(Buffer, Dev->Config.Descriptor, Size);
-		*Received = Size;
-		return STATUS_SUCCESS;
 	}
 
 	URB urb;
@@ -74,7 +65,7 @@ NTSTATUS GetConfigDescriptorByIndex(
 	urb.UrbControlDescriptorRequest.Index = Index; // usb device itself is 0 index
 	urb.UrbControlDescriptorRequest.LanguageId = 0;
 
-	ntStatus = SendUSBDRequest(Dev, &urb);
+	ntStatus = SendUrbSync(Dev, &urb);
 	if (!NT_SUCCESS(ntStatus) || !USBD_SUCCESS(urb.UrbHeader.Status)) {
 		LOG_ERROR("Getting config descriptor failed: status 0x%x, urb status: 0x%x", ntStatus, urb.UrbHeader.Status);
 		*Received = 0;
@@ -93,11 +84,9 @@ NTSTATUS GetConfigDescriptorByValue(
 	OUT PVOID Buffer,
 	IN ULONG Size,
 	IN UCHAR Value,
-	OUT PULONG Received,
-	OUT PUCHAR Index
+	OUT PULONG Received
 ) {
 	NTSTATUS ntStatus = STATUS_SUCCESS;
-	*Index = 0;
 	*Received = 0;
 
 	if (Dev->DeviceDescriptor.bLength == 0) {
@@ -112,13 +101,11 @@ NTSTATUS GetConfigDescriptorByValue(
 	ntStatus = GetConfigDescriptorByIndex(Dev, Buffer, Size, Value - 1, Received);
 	while (!NT_SUCCESS(ntStatus) || ((PUSB_CONFIGURATION_DESCRIPTOR)Buffer)->bConfigurationValue != Value) {
 		if (i >= Dev->DeviceDescriptor.bNumConfigurations) {
-			*Index = 0;
 			*Received = 0;
 			return STATUS_NOT_FOUND;
 		}
 		if (i == Value - 1) continue;
 		ntStatus = GetConfigDescriptorByIndex(Dev, Buffer, Size, i, Received);
-		*Index = i;
 		i++;
 	}
 	//received length should already be set from last get
@@ -134,21 +121,14 @@ NTSTATUS UnsetConfiguration(
 	urb.UrbHeader.Function = URB_FUNCTION_SELECT_CONFIGURATION;
 	urb.UrbHeader.Length = sizeof(struct _URB_SELECT_CONFIGURATION);
 
-	status = SendUSBDRequest(Dev, &urb);
+	status = SendUrbSync(Dev, &urb);
 	if (!NT_SUCCESS(status) || !USBD_SUCCESS(urb.UrbHeader.Status)) {
 		LOG_ERROR("Resetting configuration failed: status: 0x%x, urb status: 0x%x", status, urb.UrbHeader.Status);
 		return status;
 	}
 
-	Dev->Config.Descriptor = NULL;
+	RtlZeroMemory(&Dev->Config, sizeof(Dev->Config));
 	Dev->Config.Handle = urb.UrbSelectConfiguration.ConfigurationHandle;
-	Dev->Config.Value = 0;
-	Dev->Config.Index = 0;
-	Dev->Config.TotalSize = 0;
-	RtlZeroMemory(Dev->Config.DescriptorBuffer, sizeof(Dev->Config.DescriptorBuffer));
-	Dev->Config.IsConfigured = FALSE;
-
-	// TODO: clear pipes
 
 	return status;
 }
@@ -157,8 +137,9 @@ NTSTATUS SetConfigurationByValue(
 	INOUT PIU_DEVICE Dev,
 	IN UCHAR Value
 ) {
-	NTSTATUS status;
-	if (Dev->Config.Value == Value) {
+	NTSTATUS status = STATUS_SUCCESS; 
+
+	if (Dev->Config.Descriptor && Dev->Config.Descriptor->bConfigurationValue == Value) {
 		LOG_INFO("Configuration already set to value");
 		return STATUS_SUCCESS;
 	}
@@ -169,32 +150,25 @@ NTSTATUS SetConfigurationByValue(
 	}
 	
 	ULONG configLen;
-	UCHAR configInd;
-	UCHAR configBuf[IU_MAX_CONFIGURATION_DESCRIPTOR_LENGTH];
-	status = GetConfigDescriptorByValue(
-		Dev, 
-		configBuf,
-		sizeof(configBuf), 
-		Value,
-		&configLen,
-		&configInd
-	);
+	status = GetConfigDescriptorByValue(Dev, Dev->Config.Buffer, sizeof(Dev->Config.Buffer), Value, &configLen);
 	if (!NT_SUCCESS(status)) {
-		LOG_INFO("Getting config descriptor failed");
+		LOG_ERROR("Could not get configuration descriptor for set config");
 		return status;
 	}
-	if (configLen > IU_MAX_CONFIGURATION_DESCRIPTOR_LENGTH) {
-		LOG_INFO("Configuration descriptor exceeds max size!");
+	if (((PUSB_CONFIGURATION_DESCRIPTOR)Dev->Config.Buffer)->wTotalLength > IU_MAX_CONFIGURATION_BUFFER_SIZE) {
+		LOG_ERROR("Device config is too big!");
 		return STATUS_BUFFER_TOO_SMALL;
 	}
+	Dev->Config.Descriptor = (PUSB_CONFIGURATION_DESCRIPTOR)Dev->Config.Buffer;
 
-	LOG_INFO("Config len is %d bytes", configLen);
+	LOG_INFO("Config len is %d bytes", Dev->Config.Descriptor->wTotalLength);
 
-	ULONG numInterfaces = ((PUSB_CONFIGURATION_DESCRIPTOR)configBuf)->bNumInterfaces;
-	PUSBD_INTERFACE_LIST_ENTRY interfaces = ExAllocatePoolZero(
+	PUSBD_INTERFACE_LIST_ENTRY interfaces = NULL;
+	ULONG numInterfaces = Dev->Config.Descriptor->bNumInterfaces;
+	interfaces = ExAllocatePoolZero(
 		NonPagedPoolNx,
 		sizeof(USBD_INTERFACE_LIST_ENTRY) * (numInterfaces + 1),
-		'nocc' // [C]hange [Con]figuration
+		IU_ALLOC_CONFIG_POOL
 	);
 	if (!interfaces) {
 		LOG_ERROR("Interface array alloc failed");
@@ -203,10 +177,10 @@ NTSTATUS SetConfigurationByValue(
 
 	PURB urbp = NULL;
 	PUSB_INTERFACE_DESCRIPTOR intfDesc;
-	PUCHAR startP = configBuf;
+	PUCHAR startP = (PUCHAR)Dev->Config.Descriptor;
 	for (ULONG i = 0; i < numInterfaces; i++) {
 		intfDesc = USBD_ParseConfigurationDescriptorEx(
-			(PUSB_CONFIGURATION_DESCRIPTOR)configBuf,
+			Dev->Config.Descriptor,
 			startP,
 			-1,	//intfnum
 			0,	//altset
@@ -229,7 +203,7 @@ NTSTATUS SetConfigurationByValue(
 
 	status = USBD_SelectConfigUrbAllocateAndBuild(
 		Dev->WDM.Handle, 
-		(PUSB_CONFIGURATION_DESCRIPTOR)configBuf, 
+		Dev->Config.Descriptor, 
 		interfaces, 
 		&urbp
 	);
@@ -238,31 +212,122 @@ NTSTATUS SetConfigurationByValue(
 		goto Cleanup;
 	}
 
-	// NOTE: no need to set max transfer size?
-	status = SendUSBDRequest(Dev, urbp);
+	status = SendUrbSync(Dev, urbp);
 	if (!NT_SUCCESS(status) || !USBD_SUCCESS(urbp->UrbHeader.Status)) {
 		LOG_ERROR("Failed to call change config");
 		if (NT_SUCCESS(status)) status = urbp->UrbHeader.Status; //possible?
 		goto Cleanup;
 	}
 
-	// TODO: get pipe info from interfaces
-
 	Dev->Config.Handle = urbp->UrbSelectConfiguration.ConfigurationHandle;
-	Dev->Config.TotalSize = configLen;
-	Dev->Config.Value = Value;
-	Dev->Config.Index = configInd;
-	RtlCopyMemory(Dev->Config.DescriptorBuffer, configBuf, configLen);
-	Dev->Config.Descriptor = (PUSB_CONFIGURATION_DESCRIPTOR)Dev->Config.DescriptorBuffer;
-	Dev->Config.IsConfigured = TRUE;
+	status = UpdateConfigurationFromInterfaceList(Dev, interfaces);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Failed to fill information");
+		goto Cleanup;
+	}
 
 	LOG_INFO("Set configuration to %d", Value);
 
 Cleanup:
 	if (interfaces)
-		ExFreePool2(interfaces, 'nocc', 0, 0);
+		ExFreePoolWithTag(interfaces, IU_ALLOC_CONFIG_POOL);
 	if (urbp) 
 		USBD_UrbFree(Dev->WDM.Handle, urbp);
 	return status;
 }
 
+NTSTATUS SetInterface(
+	PIU_DEVICE Dev,
+	UCHAR InterfaceNumber,
+	UCHAR Altsetting
+) {
+	NTSTATUS status = STATUS_SUCCESS;
+
+	if (!Dev->Config.Descriptor || !Dev->Config.Handle) {
+		LOG_ERROR("Device is not configured, cannot set inferface");
+		return STATUS_INVALID_DEVICE_STATE;
+	}
+
+	PUSB_INTERFACE_DESCRIPTOR intfDesc = USBD_ParseConfigurationDescriptorEx(
+		Dev->Config.Descriptor,
+		Dev->Config.Descriptor,
+		InterfaceNumber,
+		Altsetting,
+		-1, -1, -1
+	);
+	if (!intfDesc) {
+		LOG_ERROR("Cannot set nonexistent interface");
+		return STATUS_NO_MORE_ENTRIES;
+	}
+
+	USBD_INTERFACE_LIST_ENTRY intfSelection; // need dyn alloc for async?
+	intfSelection.InterfaceDescriptor = intfDesc;
+	PURB urbp;
+	status = USBD_SelectInterfaceUrbAllocateAndBuild(
+		Dev->WDM.Handle,
+		Dev->Config.Handle,
+		&intfSelection,
+		&urbp
+	);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Failed to build urb");
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	//need free urb from here
+	status = SendUrbSync(Dev, urbp);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("could not send urb");
+		goto Cleanup;
+	}
+
+	status = UpdateInterfaceFromInterfaceEntry(Dev, &intfSelection);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Update interface failed!");
+		goto Cleanup;
+	}
+
+	LOG_INFO("set interface success");
+Cleanup:
+	if (urbp) 
+		USBD_UrbFree(Dev->WDM.Handle, urbp);
+	return status;
+}
+
+NTSTATUS UpdateConfigurationFromInterfaceList(
+	PIU_DEVICE Dev,
+	PUSBD_INTERFACE_LIST_ENTRY InterfaceList //after calling set interface
+) {
+	NTSTATUS status = STATUS_SUCCESS;
+	for (UCHAR i = 0; i < Dev->Config.Descriptor->bNumInterfaces; i++) {
+		status = UpdateInterfaceFromInterfaceEntry(Dev, &InterfaceList[i]);
+		if (!NT_SUCCESS(status)) {
+			LOG_INFO("update configuration failed");
+			return status;
+		}
+	}
+	return status;
+}
+
+NTSTATUS UpdateInterfaceFromInterfaceEntry(
+	PIU_DEVICE Dev,
+	PUSBD_INTERFACE_LIST_ENTRY InterfaceEntry
+) {
+	if (!InterfaceEntry || !InterfaceEntry->Interface) {
+		return STATUS_INVALID_PARAMETER;
+	}
+	PUSBD_INTERFACE_INFORMATION intf = InterfaceEntry->Interface;
+	Dev->Config.InterfaceAltsetting[intf->InterfaceNumber] = intf->AlternateSetting;
+	Dev->Config.InterfaceHandles[intf->InterfaceNumber] = intf->InterfaceHandle;
+
+	for (UCHAR j = 0; j < intf->NumberOfPipes; j++) {
+		UCHAR PipeNum = intf->Pipes[j].EndpointAddress & 0x0F;
+		if (PipeNum >= IU_MAX_NUMBER_OF_ENDPOINTS) {
+			LOG_ERROR("Device has too many endpoints!");
+			return STATUS_BUFFER_TOO_SMALL;
+		}
+		Dev->Config.Pipes[PipeNum] = intf->Pipes[j];
+		//TODO: switch pipe information for windows
+	}
+	return STATUS_SUCCESS;
+}

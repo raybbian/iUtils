@@ -2,12 +2,12 @@
 
 #include "driver.h"
 
-NTSTATUS SendUSBDRequest(
+NTSTATUS SendUrbSync(
 	IN PIU_DEVICE Dev,
 	INOUT PVOID Urb
 );
 
-NTSTATUS SendUSBDRequestEx(
+NTSTATUS SendUrbSyncEx(
 	IN PIU_DEVICE Dev,
 	INOUT PVOID Urb,
 	IN ULONG ControlCode,

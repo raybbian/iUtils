@@ -2,7 +2,7 @@
 #include "configuration.h"
 #include "apple.h"
 #include "log.h"
-#include "children.h"
+#include "child.h"
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (PAGE, KeystoneCreateDevice)
@@ -16,6 +16,10 @@ NTSTATUS KeystoneCreateDevice(
 	NTSTATUS status;
 	PAGED_CODE();
 
+	//Set come properties
+	WdfDeviceInitSetDeviceType(DeviceInit, FILE_DEVICE_BUS_EXTENDER);
+	// exclusive?
+
 	WDF_PNPPOWER_EVENT_CALLBACKS pnpPowerCallbacks;
 	WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpPowerCallbacks);
 	pnpPowerCallbacks.EvtDevicePrepareHardware = KeystoneEvtDevicePrepareHardware;
@@ -28,18 +32,7 @@ NTSTATUS KeystoneCreateDevice(
 	//TODO: access registry key?
 
 	//create child list
-	WDF_CHILD_LIST_CONFIG childListConfig;
-	WDF_CHILD_LIST_CONFIG_INIT(
-		&childListConfig, 
-		sizeof(IU_CHILD_DEVICE_ID), 
-		KeystoneEvtChildListCreateDevice
-	);
-	childListConfig.EvtChildListScanForChildren = KeystoneEvtChildListScanForChildren;
-	WdfFdoInitSetDefaultChildListConfig(
-		DeviceInit,
-		&childListConfig,
-		WDF_NO_OBJECT_ATTRIBUTES
-	);
+	KeystoneChildListInitialize(DeviceInit);
 
 	//create WDF device
 	WDF_OBJECT_ATTRIBUTES deviceAttributes;
@@ -50,19 +43,24 @@ NTSTATUS KeystoneCreateDevice(
 		LOG_ERROR("Failed to create wdf device");
 		return status;
 	}
-
 	PIU_DEVICE dev = DeviceGetContext(device);
 	RtlZeroMemory(dev, sizeof(IU_DEVICE));
-	//TODO: init private fields
 	dev->Self = device;
+	//TODO: init private fields
+
+	//FDO queue? for user app maybe interface
 
 	status = WdfDeviceCreateDeviceInterface(
 		device,
 		&GUID_DEVINTERFACE_Keystone,
-		NULL
+		NULL //reference string?
 	);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Create device interface failed");
+		return status;
+	}
 
-	//Enumerate bus devices
+	//TODO: WMI registration?
 
 	return status;
 }
@@ -94,7 +92,7 @@ NTSTATUS KeystoneEvtDevicePrepareHardware(
 		LOG_ERROR("Failed to get WDM handle");
 		return status;
 	}
-	dev->WDM.HandleOpen = TRUE;
+	dev->WDMIsInitialized = TRUE;
 
 	// Initialize WDF Handle and device descriptor
 	if (dev->Handle == NULL) { //could be same handle after stop (?)
@@ -122,8 +120,7 @@ NTSTATUS KeystoneEvtDevicePrepareHardware(
 	}
 
 	// Get current apple mode
-	APPLE_CONNECTION_MODE curAppleMode;
-	status = GetAppleMode(dev, &curAppleMode);
+	APPLE_CONNECTION_MODE curAppleMode = GetAppleMode(dev);
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Failed to get apple mode");
 		return status;
@@ -152,12 +149,10 @@ NTSTATUS KeystoneEvtDeviceReleaseHardware(
 
 	PIU_DEVICE dev = DeviceGetContext(Device);
 
-	dev->WDM.Self = NULL;
-	dev->WDM.NextStackDevice = NULL;
-	dev->WDM.PhysicalDeviceObject = NULL;
-	if (dev->WDM.HandleOpen) 
+	if (dev->WDMIsInitialized) 
 		USBD_CloseHandle(dev->WDM.Handle);
-	dev->WDM.HandleOpen = FALSE;
+	RtlZeroMemory(&dev->WDM, sizeof(dev->WDM));
+	dev->WDMIsInitialized = FALSE;
 
 	return status;
 }
