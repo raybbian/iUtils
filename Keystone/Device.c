@@ -20,6 +20,8 @@ NTSTATUS KeystoneCreateDevice(
 	WDF_PNPPOWER_EVENT_CALLBACKS pnpPowerCallbacks;
 	WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpPowerCallbacks);
 	pnpPowerCallbacks.EvtDevicePrepareHardware = KeystoneEvtDevicePrepareHardware;
+	pnpPowerCallbacks.EvtDeviceD0Entry = KeystoneEvtDeviceD0Entry;
+	pnpPowerCallbacks.EvtDeviceD0Exit = KeystoneEvtDeviceD0Exit;
 	pnpPowerCallbacks.EvtDeviceReleaseHardware = KeystoneEvtDeviceReleaseHardware;
 	//TODO: add other pnpcallbacks
 	WdfDeviceInitSetPnpPowerEventCallbacks(DeviceInit, &pnpPowerCallbacks);
@@ -43,16 +45,16 @@ NTSTATUS KeystoneCreateDevice(
 	PIU_DEVICE dev = DeviceGetContext(device);
 	RtlZeroMemory(dev, sizeof(IU_DEVICE));
 	dev->Self = device;
-	//TODO: init private fields
 
-	// for some reason forwarding the wdf request directly to the actual PDO from the child PDO was
-	// not working, so requests are forwarded into the parent queue and then into the actual PDO
+	// init queue (has side effect of setting correct stack size for child pdo forwarding ?)
+	// also to handle user app ioctl
 	status = KeystoneQueueInitialize(device);
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Failed to create queue!");
 		return status;
 	}
 
+	//create interface for talking with user app
 	status = WdfDeviceCreateDeviceInterface(
 		device,
 		&GUID_DEVINTERFACE_Keystone,
@@ -92,12 +94,12 @@ NTSTATUS KeystoneEvtDevicePrepareHardware(
 		&dev->WDM.Handle
 	);
 	if (!NT_SUCCESS(status)) {
-		LOG_ERROR("Failed to get WDM handle");
+		LOG_ERROR("Failed to get WDM handle, status=%X", status);
 		return status;
 	}
 	dev->WDMIsInitialized = TRUE;
 
-	// Initialize WDF Handle and device descriptor
+	// Initialize WDF Handle
 	if (dev->Handle == NULL) { //could be same handle after stop (?)
 		WDF_USB_DEVICE_CREATE_CONFIG createParams;
 		WDF_USB_DEVICE_CREATE_CONFIG_INIT(
@@ -111,16 +113,28 @@ NTSTATUS KeystoneEvtDevicePrepareHardware(
 			&dev->Handle
 		);
 		if (!NT_SUCCESS(status)) {
-			LOG_ERROR("Failed to get WDF handle");
+			LOG_ERROR("Failed to get WDF handle, status=%X", status);
 			return status;
 		}
 
-		//get the device descriptor
-		WdfUsbTargetDeviceGetDeviceDescriptor(
-			dev->Handle, 
-			&dev->DeviceDescriptor
-		);
 	}
+
+	return status;
+}
+
+NTSTATUS KeystoneEvtDeviceD0Entry(
+	WDFDEVICE Device,
+	WDF_POWER_DEVICE_STATE PreviousState
+) {
+	NTSTATUS status = STATUS_SUCCESS;
+	UNREFERENCED_PARAMETER(PreviousState);
+	PIU_DEVICE dev = DeviceGetContext(Device);
+
+	//get the device descriptor
+	WdfUsbTargetDeviceGetDeviceDescriptor(
+		dev->Handle, 
+		&dev->DeviceDescriptor
+	);
 
 	// Get current apple mode
 	APPLE_CONNECTION_MODE curAppleMode = GetAppleMode(dev);
@@ -140,6 +154,17 @@ NTSTATUS KeystoneEvtDevicePrepareHardware(
 	}
 
 	return status;
+}
+
+NTSTATUS KeystoneEvtDeviceD0Exit(
+	WDFDEVICE Device,
+	WDF_POWER_DEVICE_STATE PreviousState
+) {
+	UNREFERENCED_PARAMETER(Device);
+	UNREFERENCED_PARAMETER(PreviousState);
+
+	LOG_INFO("Exiting D0");
+	return STATUS_SUCCESS;
 }
 
 NTSTATUS KeystoneEvtDeviceReleaseHardware(

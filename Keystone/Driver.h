@@ -9,6 +9,7 @@
 
 #include "device.h"
 
+
 #define IU_ALLOC_CONFIG_POOL 'fnoc'
 
 DRIVER_INITIALIZE DriverEntry;

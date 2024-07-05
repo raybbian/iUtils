@@ -1,4 +1,5 @@
 #include "queue.h"
+#include "public.h"
 #include "log.h"
 
 #ifdef ALLOC_PRAGMA
@@ -17,7 +18,7 @@ NTSTATUS KeystoneQueueInitialize(
 		WdfIoQueueDispatchParallel
 	);
 
-	queueConfig.EvtIoDefault = KeystoneEvtIoDefault;
+	queueConfig.EvtIoDeviceControl = KeystoneEvtIoDeviceControl;
 	queueConfig.EvtIoStop = KeystoneEvtIoStop;
 
 	status = WdfIoQueueCreate(
@@ -36,17 +37,29 @@ NTSTATUS KeystoneQueueInitialize(
 	return status;
 }
 
-VOID KeystoneEvtIoDefault(
+VOID KeystoneEvtIoDeviceControl(
 	WDFQUEUE Queue,
-	WDFREQUEST Request
+	WDFREQUEST Request,
+	size_t OutputBufferLength,
+	size_t InputBufferLength,
+	ULONG IoControlCode
 ) {
-	WDFDEVICE Device = WdfIoQueueGetDevice(Queue);
-	WDFIOTARGET target = WdfDeviceGetIoTarget(Device);
-	WdfRequestFormatRequestUsingCurrentType(Request);
-	WDF_REQUEST_SEND_OPTIONS options;
-	WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SEND_AND_FORGET);
-	if (!WdfRequestSend(Request, target, &options))
-		WdfRequestComplete(Request, WdfRequestGetStatus(Request));
+	PIU_DEVICE Dev = DeviceGetContext(WdfIoQueueGetDevice(Queue));
+	UNREFERENCED_PARAMETER(OutputBufferLength);
+	UNREFERENCED_PARAMETER(InputBufferLength);
+	switch (IoControlCode) {
+	case IOCTL_QUERY_APPLE_MODE:
+		LOG_INFO("query apple mode called %d", Dev->AppleMode);
+		WdfRequestComplete(Request, STATUS_SUCCESS);
+		break;
+	case IOCTL_SET_APPLE_MODE:
+		LOG_INFO("query apple mode called");
+		WdfRequestComplete(Request, STATUS_SUCCESS);
+		break;
+	default:
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
+		break;
+	}
 }
 
 VOID KeystoneEvtIoStop(

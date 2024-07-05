@@ -1,6 +1,7 @@
 #pragma once
 
 #include "driver.h"
+#include "functions.h"
 
 //Child devices
 VOID KeystoneChildListInitialize(

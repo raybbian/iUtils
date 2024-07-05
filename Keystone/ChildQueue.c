@@ -20,7 +20,6 @@ NTSTATUS KeystoneChildQueueInitialize(
 		WdfIoQueueDispatchParallel
 	);
 
-	queueConfig.EvtIoDeviceControl = KeystoneChildEvtIoDeviceControl;
 	queueConfig.EvtIoInternalDeviceControl = KeystoneChildEvtIoInternalDeviceControl;
 	queueConfig.EvtIoDefault = KeystoneChildEvtIoDefault;
 	queueConfig.EvtIoStop = KeystoneChildEvtIoStop;
@@ -47,21 +46,8 @@ VOID KeystoneChildEvtIoDefault(
 	WDFREQUEST Request
 ) {
 	UNREFERENCED_PARAMETER(Queue);
-	LOG_INFO("Default io handle");
-	ForwardRequestToParent(Request);
-}
-
-VOID KeystoneChildEvtIoDeviceControl(
-	IN WDFQUEUE Queue,
-	IN WDFREQUEST Request,
-	IN size_t OutputBufferLength,
-	IN size_t InputBufferLength,
-	IN ULONG IoControlCode
-) {
-	UNREFERENCED_PARAMETER(Queue);
-	LOG_INFO("IoDeviceControl OutputBufferLength % d InputBufferLength % d IoControlCode % d",
-		(int)OutputBufferLength, (int)InputBufferLength, IoControlCode);
-	ForwardRequestToParent(Request);
+	LOG_INFO("Default io handle"); //for debug purposes
+	RequestIsUnsupported(Request);
 }
 
 VOID KeystoneChildEvtIoInternalDeviceControl(
@@ -82,7 +68,7 @@ VOID KeystoneChildEvtIoInternalDeviceControl(
 	}
 	default:
 		LOG_ERROR("IOCTL %u not implemented yet!", IoControlCode);
-		ForwardRequestToParent(Request);
+		RequestIsUnsupported(Request);
 		break;
 	}
 }
@@ -94,43 +80,19 @@ VOID KeystoneChildEvtIoStop(
 ) {
 	UNREFERENCED_PARAMETER(Queue);
 	LOG_INFO("IoStop Request 0x % p ActionFlags % d", Request, ActionFlags);
-
-	//
-	// In most cases, the EvtIoStop callback function completes, cancels, or postpones
-	// further processing of the I/O request.
-	//
-	// Typically, the driver uses the following rules:
-	//
-	// - If the driver owns the I/O request, it either postpones further processing
-	//   of the request and calls WdfRequestStopAcknowledge, or it calls WdfRequestComplete
-	//   with a completion status value of STATUS_SUCCESS or STATUS_CANCELLED.
-	//  
-	//   The driver must call WdfRequestComplete only once, to either complete or cancel
-	//   the request. To ensure that another thread does not call WdfRequestComplete
-	//   for the same request, the EvtIoStop callback must synchronize with the driver's
-	//   other event callback functions, for instance by using interlocked operations.
-	//
-	// - If the driver has forwarded the I/O request to an I/O target, it either calls
-	//   WdfRequestCancelSentRequest to attempt to cancel the request, or it postpones
-	//   further processing of the request and calls WdfRequestStopAcknowledge.
-	//
-	// A driver might choose to take no action in EvtIoStop for requests that are
-	// guaranteed to complete in a small amount of time. For example, the driver might
-	// take no action for requests that are completed in one of the driver’s request handlers.
-	//
-
 	return;
 }
 
-VOID ForwardRequestToParent(
+VOID ForwardRequestBeyondFDO(
 	WDFREQUEST Request
 ) {
-	WDFDEVICE ParentDev = WdfPdoGetParent(WdfIoQueueGetDevice(WdfRequestGetIoQueue(Request)));
-	WDF_REQUEST_FORWARD_OPTIONS options;
-	WDF_REQUEST_FORWARD_OPTIONS_INIT(&options); // send and forget
-	NTSTATUS status = WdfRequestForwardToParentDeviceIoQueue(Request, WdfDeviceGetDefaultQueue(ParentDev), &options);
-	if (!NT_SUCCESS(status)) 
-		WdfRequestComplete(Request, status);
+	WDFDEVICE Device = WdfPdoGetParent(WdfIoQueueGetDevice(WdfRequestGetIoQueue(Request)));
+	WDFIOTARGET target = WdfDeviceGetIoTarget(Device);
+	WdfRequestFormatRequestUsingCurrentType(Request);
+	WDF_REQUEST_SEND_OPTIONS options;
+	WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SEND_AND_FORGET);
+	if (!WdfRequestSend(Request, target, &options))
+		WdfRequestComplete(Request, WdfRequestGetStatus(Request));
 }
 
 VOID RequestIsUnsupported(

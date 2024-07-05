@@ -121,3 +121,94 @@ NTSTATUS ActivateUsbMuxFunction(
 	}
 	return status;
 }
+
+#define CDC_CLASS_DESCRIPTOR_TYPE 36 //(USB_CLASS_TYPE | USB_DESCRIPTOR_TYPE)
+#define CDC_CLASS_UNION_TYPE 6
+
+NTSTATUS ActivateCdcNcmFunction(
+	PIU_DEVICE Dev,
+	WDFCHILDLIST ChildList
+) {
+	NTSTATUS status = STATUS_SUCCESS;
+
+	PUSB_INTERFACE_DESCRIPTOR cdcControlDesc = USBD_ParseConfigurationDescriptorEx(
+		Dev->Config.Descriptor,
+		Dev->Config.Descriptor,
+		-1,
+		-1,
+		USB_DEVICE_CLASS_COMMUNICATIONS,
+		USB_DEVICE_SUBCLASS_CDC_NCM,
+		-1
+	);
+	if (!cdcControlDesc) {
+		LOG_INFO("Failed to get interface for cdc control desc, continuing");
+		return STATUS_NOT_SUPPORTED;
+	}
+
+	//search for associated data descriptor
+	PUSB_COMMON_DESCRIPTOR desc = NULL;
+	SHORT dataInterfaceNum = -1;
+	PUCHAR startP = (PUCHAR)cdcControlDesc;
+	while ((desc = USBD_ParseDescriptors(
+		Dev->Config.Descriptor,
+		Dev->Config.Descriptor->wTotalLength,
+		startP,
+		CDC_CLASS_DESCRIPTOR_TYPE
+	)) != NULL) {
+		PUCHAR tmp = (PUCHAR)desc;
+		if (tmp[2] == CDC_CLASS_UNION_TYPE) {
+			if (tmp[3] != cdcControlDesc->bInterfaceNumber) {
+				LOG_ERROR("Found union descriptor is not for found cdc control descriptor");
+				return STATUS_UNSUCCESSFUL;
+			}
+			dataInterfaceNum = tmp[4]; //subordinate interface
+			LOG_INFO("Found data interface for cdc ncm");
+			break;
+		}
+		startP = (PUCHAR)desc + desc->bLength;
+	}
+	
+	if (dataInterfaceNum < 0) {
+		LOG_ERROR("could not find data interface num");
+		return STATUS_UNSUCCESSFUL;
+	}
+	
+
+	IU_CHILD_IDENTIFIER cdcNcmId;
+	RtlZeroMemory(&cdcNcmId, sizeof(cdcNcmId));
+	WDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER_INIT(
+		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&cdcNcmId,
+		sizeof(IU_CHILD_IDENTIFIER)
+	);
+	cdcNcmId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
+	cdcNcmId.FunctionType = APPLE_FUNCTION_CDC_NCM;
+	cdcNcmId.NumberOfInterfaces = 2;
+	cdcNcmId.NumberOfCompatibleIds = 6;
+	cdcNcmId.InterfacesUsed[0] = cdcControlDesc->bInterfaceNumber;
+	cdcNcmId.InterfacesUsed[1] = (UCHAR)dataInterfaceNum;
+	RtlInitUnicodeString(&cdcNcmId.HardwareId, L"USB\\VID_05AC&PID_12AB&MI_02");
+	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[0], L"USB\\COMPAT_VID_05ac&Class_02&SubClass_0D&Prot_00");
+	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[1], L"USB\\COMPAT_VID_05ac&Class_02&SubClass_0D");
+	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[2], L"USB\\COMPAT_VID_05ac&Class_02");
+	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[3], L"USB\\Class_02&SubClass_0D&Prot_00");
+	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[4], L"USB\\Class_02&SubClass_0D");
+	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[5], L"USB\\Class_02");
+	RtlInitUnicodeString(&cdcNcmId.FunctionalDescription, L"CDC NCM Device");
+
+	status = WdfChildListAddOrUpdateChildDescriptionAsPresent(
+		ChildList,
+		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&cdcNcmId,
+		NULL
+	);
+	if (status == STATUS_OBJECT_NAME_EXISTS) {
+		LOG_INFO("Updating cdc ncm instead");
+		status = STATUS_SUCCESS;
+	}
+	else if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Could not add cdc ncm");
+	}
+	else {
+		LOG_INFO("Activated cdc ncm");
+	}
+	return status;
+}

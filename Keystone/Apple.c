@@ -3,7 +3,7 @@
 #include "configuration.h"
 #include "log.h"
 #include "urbsend.h"
-
+#include "functions.h"
 
 NTSTATUS SetAppleMode(
 	INOUT PIU_DEVICE Dev,

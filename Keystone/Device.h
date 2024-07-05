@@ -54,7 +54,6 @@ NTSTATUS KeystoneCreateDevice(
 // PNP
 EVT_WDF_DEVICE_PREPARE_HARDWARE KeystoneEvtDevicePrepareHardware;
 EVT_WDF_DEVICE_RELEASE_HARDWARE KeystoneEvtDeviceReleaseHardware;
-// TODO:
 EVT_WDF_DEVICE_D0_ENTRY KeystoneEvtDeviceD0Entry;
 EVT_WDF_DEVICE_D0_EXIT KeystoneEvtDeviceD0Exit;
 

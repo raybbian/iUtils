@@ -45,6 +45,9 @@ VOID KeystoneEvtChildListScanForChildren(
 
 	ActivatePTPFunction(Dev, ChildList);
 	ActivateUsbMuxFunction(Dev, ChildList); 
+	if (Dev->AppleMode == APPLE_MODE_NETWORK) {
+		ActivateCdcNcmFunction(Dev, ChildList);
+	}
 	//TODO: others
 
 	WdfChildListEndScan(ChildList);
@@ -60,6 +63,8 @@ NTSTATUS KeystoneEvtChildListCreateDevice(
 	NTSTATUS status = STATUS_SUCCESS;
 	UNREFERENCED_PARAMETER(ChildList);
 
+	// ensure that pdo stack size is parent stack size + 1
+	// allows us to send requests directly to next device under fdo
 	WdfPdoInitAllowForwardingRequestToParent(ChildInit);
 
 	WDFDEVICE DeviceObject = WdfChildListGetDevice(ChildList);

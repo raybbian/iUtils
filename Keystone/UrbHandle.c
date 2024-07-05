@@ -26,7 +26,7 @@ VOID UrbCompleteDispatch(
 	case URB_FUNCTION_CONTROL_TRANSFER:
 	case URB_FUNCTION_CONTROL_TRANSFER_EX:
 		LOG_INFO("ctrl xfer");
-		ForwardRequestToParent(Request);
+		ForwardRequestBeyondFDO(Request);
 		break;
 	case URB_FUNCTION_ABORT_PIPE:
 	case URB_FUNCTION_GET_CURRENT_FRAME_NUMBER:
@@ -40,7 +40,7 @@ VOID UrbCompleteDispatch(
 	case URB_FUNCTION_GET_STATUS_FROM_ENDPOINT:
 	case URB_FUNCTION_GET_STATUS_FROM_OTHER:
 	case URB_FUNCTION_GET_CONFIGURATION:
-		ForwardRequestToParent(Request);
+		ForwardRequestBeyondFDO(Request);
 		break;
 	case URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE:
 		UrbCompleteGetDescriptorfromDevice(Request);
@@ -83,7 +83,7 @@ VOID UrbCompleteDispatch(
 	case URB_FUNCTION_CLASS_ENDPOINT:
 	case URB_FUNCTION_CLASS_OTHER:
 		LOG_INFO("Forwarding vendor/class urb");
-		ForwardRequestToParent(Request);
+		ForwardRequestBeyondFDO(Request);
 		break;
 	case URB_FUNCTION_GET_INTERFACE:
 		UrbCompleteGetInterface(Request);
@@ -136,7 +136,7 @@ VOID UrbCompleteGetDescriptorfromDevice(
 		status = STATUS_SUCCESS;
 		break;
 	case USB_STRING_DESCRIPTOR_TYPE:
-		ForwardRequestToParent(Request);
+		ForwardRequestBeyondFDO(Request);
 		return;
 	default: {
 		PUSB_COMMON_DESCRIPTOR desc = NULL;
