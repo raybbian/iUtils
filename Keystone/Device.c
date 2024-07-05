@@ -17,9 +17,6 @@ NTSTATUS KeystoneCreateDevice(
 	NTSTATUS status;
 	PAGED_CODE();
 
-	// we forward all requests to this queue (usually from the child pdos) down
-	WdfFdoInitSetFilter(DeviceInit);
-
 	WDF_PNPPOWER_EVENT_CALLBACKS pnpPowerCallbacks;
 	WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpPowerCallbacks);
 	pnpPowerCallbacks.EvtDevicePrepareHardware = KeystoneEvtDevicePrepareHardware;
@@ -48,6 +45,8 @@ NTSTATUS KeystoneCreateDevice(
 	dev->Self = device;
 	//TODO: init private fields
 
+	// for some reason forwarding the wdf request directly to the actual PDO from the child PDO was
+	// not working, so requests are forwarded into the parent queue and then into the actual PDO
 	status = KeystoneQueueInitialize(device);
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Failed to create queue!");

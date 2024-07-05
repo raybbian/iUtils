@@ -317,17 +317,14 @@ NTSTATUS UpdateInterfaceFromInterfaceEntry(
 		return STATUS_INVALID_PARAMETER;
 	}
 	PUSBD_INTERFACE_INFORMATION intf = InterfaceEntry->Interface;
-	Dev->Config.InterfaceAltsetting[intf->InterfaceNumber] = intf->AlternateSetting;
-	Dev->Config.InterfaceHandles[intf->InterfaceNumber] = intf->InterfaceHandle;
-
-	for (UCHAR j = 0; j < intf->NumberOfPipes; j++) {
-		UCHAR PipeNum = intf->Pipes[j].EndpointAddress & 0x0F;
-		if (PipeNum >= IU_MAX_NUMBER_OF_ENDPOINTS) {
-			LOG_ERROR("Device has too many endpoints!");
-			return STATUS_BUFFER_TOO_SMALL;
-		}
-		Dev->Config.Pipes[PipeNum] = intf->Pipes[j];
-		//TODO: switch pipe information for windows
+	if (intf->NumberOfPipes > IU_MAX_NUMBER_OF_ENDPOINTS_PER_INTERFACE) {
+		LOG_ERROR("Too many pipes for one interface");
+		return STATUS_BUFFER_TOO_SMALL;
 	}
+	RtlCopyMemory(
+		&Dev->Config.Interfaces[intf->InterfaceNumber],
+		intf,
+		intf->Length
+	);
 	return STATUS_SUCCESS;
 }

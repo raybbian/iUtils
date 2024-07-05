@@ -49,9 +49,6 @@
     <ClInclude Include="Driver.h">
       <Filter>3. Core Driver Functionality</Filter>
     </ClInclude>
-    <ClInclude Include="ChildIo.h">
-      <Filter>4. Communication w/ USB Stack Above</Filter>
-    </ClInclude>
     <ClInclude Include="Child.h">
       <Filter>3. Core Driver Functionality</Filter>
     </ClInclude>
@@ -60,6 +57,12 @@
     </ClInclude>
     <ClInclude Include="UrbHandle.h">
       <Filter>4. Communication w/ USB Stack Above</Filter>
+    </ClInclude>
+    <ClInclude Include="ChildQueue.h">
+      <Filter>4. Communication w/ USB Stack Above</Filter>
+    </ClInclude>
+    <ClInclude Include="Queue.h">
+      <Filter>1. Communication w/ USB Stack Below</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -78,9 +81,6 @@
     <ClCompile Include="Driver.c">
       <Filter>3. Core Driver Functionality</Filter>
     </ClCompile>
-    <ClCompile Include="ChildIo.c">
-      <Filter>4. Communication w/ USB Stack Above</Filter>
-    </ClCompile>
     <ClCompile Include="Child.c">
       <Filter>3. Core Driver Functionality</Filter>
     </ClCompile>
@@ -89,6 +89,12 @@
     </ClCompile>
     <ClCompile Include="UrbHandle.c">
       <Filter>4. Communication w/ USB Stack Above</Filter>
+    </ClCompile>
+    <ClCompile Include="ChildQueue.c">
+      <Filter>4. Communication w/ USB Stack Above</Filter>
+    </ClCompile>
+    <ClCompile Include="Queue.c">
+      <Filter>1. Communication w/ USB Stack Below</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

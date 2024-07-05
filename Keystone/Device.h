@@ -2,8 +2,8 @@
 
 #include "public.h"
 
-#define IU_MAX_NUMBER_OF_ENDPOINTS 16
-#define IU_MAX_NUMBER_OF_INTERFACES 16
+#define IU_MAX_INTERFACE_NUMBER 8
+#define IU_MAX_NUMBER_OF_ENDPOINTS_PER_INTERFACE 4
 #define IU_MAX_CONFIGURATION_BUFFER_SIZE 512
 
 //Device extension
@@ -27,9 +27,17 @@ typedef struct _IU_DEVICE {
 		USBD_CONFIGURATION_HANDLE Handle;
 
 		//use UpdateConfigurationFromInterfaceList and UpdateInterfaceFromInterfaceEntry for below
-		UCHAR InterfaceAltsetting[IU_MAX_NUMBER_OF_INTERFACES + 1];
-		USBD_INTERFACE_HANDLE InterfaceHandles[IU_MAX_NUMBER_OF_INTERFACES + 1]; //store by num
-		USBD_PIPE_INFORMATION Pipes[IU_MAX_NUMBER_OF_ENDPOINTS + 1]; //pipe info could change
+		struct {
+			USHORT Length;
+			UCHAR InterfaceNumber;
+			UCHAR AlternateSetting;
+			UCHAR Class;
+			UCHAR Protocol;
+			UCHAR _Reserved; //unused, here to match USBD_INTERFACE_INFORMATION
+			USBD_INTERFACE_HANDLE InterfaceHandle;
+			ULONG NumberOfPipes;
+			USBD_PIPE_INFORMATION Pipes[IU_MAX_NUMBER_OF_ENDPOINTS_PER_INTERFACE];
+		} Interfaces[IU_MAX_INTERFACE_NUMBER + 1];
 	} Config;
 
 	// flags for closing things

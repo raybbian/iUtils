@@ -44,7 +44,7 @@ VOID KeystoneEvtChildListScanForChildren(
 	WdfChildListBeginScan(ChildList);
 
 	ActivatePTPFunction(Dev, ChildList);
-	//ActivateUsbMuxFunction(Dev, ChildList); 
+	ActivateUsbMuxFunction(Dev, ChildList); 
 	//TODO: others
 
 	WdfChildListEndScan(ChildList);
@@ -198,35 +198,39 @@ NTSTATUS ExtractChildConfigurationDescriptor(
 	*Received += writeSize;
 
 	// copy interfaces over
+	PUCHAR endDesc = (PUCHAR)Dev->Config.Descriptor;
 	for (UCHAR i = 0; i < ChildId->NumberOfInterfaces; i++) {
-		PUCHAR endDesc = (PUCHAR)Dev->Config.Descriptor;
-		PUCHAR stDesc;
-		while ((stDesc = (PUCHAR)USBD_ParseConfigurationDescriptorEx(
+		PUCHAR stDesc = (PUCHAR)USBD_ParseConfigurationDescriptorEx(
 			Dev->Config.Descriptor,
 			endDesc, //after reading interface, make sure that it is skipped so this doesn't infinite loop
 			ChildId->InterfacesUsed[i],
-			-1, -1, -1, -1
-		)) != NULL) {
-			//get the next interface descriptor in the configuration buffer
-			//from stDesc until any next interface should be presented as the entire interface descriptor
-			PUCHAR stDescEnd = stDesc + ((PUSB_INTERFACE_DESCRIPTOR)stDesc)->bLength;
-			endDesc = (PUCHAR)USBD_ParseConfigurationDescriptorEx(
-				Dev->Config.Descriptor,
-				stDescEnd,
-				-1, -1, -1, -1, -1
-			);
-			if (endDesc == NULL) {
-				//if this was the last interface, point to the end of the configuration
-				endDesc = (PUCHAR)Dev->Config.Descriptor + Dev->Config.Descriptor->wTotalLength;
-			}
-			//copy the interface with all its endpoints
-			ULONG descLength = (ULONG)(endDesc - stDesc);
-			writeSize = min(descLength, BufferSize);
-			RtlCopyMemory(writePointer, stDesc, writeSize);
-			writePointer += writeSize;
-			BufferSize -= writeSize;
-			*Received += descLength;
+			0, //altsetting
+			-1, -1, -1
+		);
+		if (!stDesc) {
+			LOG_ERROR("Mismatch num interfaces when cerating child");
+			return STATUS_BAD_DATA;
 		}
+		//get the next interface descriptor in the configuration buffer
+		//from stDesc until any next interface should be presented as the entire interface descriptor including altsettings
+		endDesc = (PUCHAR)USBD_ParseConfigurationDescriptorEx(
+			Dev->Config.Descriptor,
+			stDesc + ((PUSB_INTERFACE_DESCRIPTOR)stDesc)->bLength,
+			-1, 
+			0, //altsetting
+			-1, -1, -1
+		);
+		if (endDesc == NULL) {
+			//if this was the last interface, point to the end of the configuration
+			endDesc = (PUCHAR)Dev->Config.Descriptor + Dev->Config.Descriptor->wTotalLength;
+		}
+		//copy the interface with all its endpoints
+		ULONG descLength = (ULONG)(endDesc - stDesc);
+		writeSize = min(descLength, BufferSize);
+		RtlCopyMemory(writePointer, stDesc, writeSize);
+		writePointer += writeSize;
+		BufferSize -= writeSize;
+		*Received += writeSize;
 	}
 	PUSB_CONFIGURATION_DESCRIPTOR out = (PUSB_CONFIGURATION_DESCRIPTOR)Buffer;
 	out->wTotalLength = (USHORT)*Received;

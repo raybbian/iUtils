@@ -14,3 +14,11 @@ VOID UrbCompleteGetDescriptorfromDevice(
 VOID UrbCompleteSetConfiguration(
 	WDFREQUEST Request
 );
+
+VOID UrbCompleteSetInterface(
+	WDFREQUEST Request
+);
+
+VOID UrbCompleteGetInterface(
+	WDFREQUEST Request
+);
