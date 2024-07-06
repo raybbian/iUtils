@@ -228,6 +228,11 @@ NTSTATUS SetConfigurationByValue(
 
 	LOG_INFO("Set configuration to %d", Value);
 
+	for (USHORT i = 0; i < Dev->Config.Descriptor->wTotalLength; i++) {
+		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", Dev->Config.Buffer[i]);
+	}
+	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
+
 Cleanup:
 	if (interfaces)
 		ExFreePoolWithTag(interfaces, IU_ALLOC_CONFIG_POOL);
@@ -262,6 +267,7 @@ NTSTATUS SetInterface(
 
 	USBD_INTERFACE_LIST_ENTRY intfSelection; // need dyn alloc for async?
 	intfSelection.InterfaceDescriptor = intfDesc;
+	intfSelection.Interface = NULL;
 	PURB urbp;
 	status = USBD_SelectInterfaceUrbAllocateAndBuild(
 		Dev->WDM.Handle,
@@ -270,7 +276,7 @@ NTSTATUS SetInterface(
 		&urbp
 	);
 	if (!NT_SUCCESS(status)) {
-		LOG_ERROR("Failed to build urb");
+		LOG_ERROR("Failed to build urb. Status = %X", status);
 		return STATUS_UNSUCCESSFUL;
 	}
 

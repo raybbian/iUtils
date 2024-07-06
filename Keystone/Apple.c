@@ -10,6 +10,10 @@ NTSTATUS SetAppleMode(
 	IN APPLE_CONNECTION_MODE Mode
 ) {
 	NTSTATUS status = STATUS_SUCCESS;
+	if (Mode < 1 || Mode > 3) {
+		LOG_ERROR("trying to set invalid apple mode");
+		return STATUS_INVALID_PARAMETER;
+	}
 
 	LOG_INFO("Trying to set apple device into new mode: %d", Mode);
 	APPLE_CONNECTION_MODE curMode = GetAppleMode(Dev);

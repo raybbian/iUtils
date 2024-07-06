@@ -26,7 +26,16 @@ VOID UrbCompleteDispatch(
 	case URB_FUNCTION_CONTROL_TRANSFER:
 	case URB_FUNCTION_CONTROL_TRANSFER_EX:
 		LOG_INFO("ctrl xfer");
-		ForwardRequestBeyondFDO(Request);
+		if (Urb->UrbControlTransfer.PipeHandle == NULL) {
+			LOG_INFO("Default pipe ctrl xfer");
+			LOG_INFO("Transfer flags: %x", Urb->UrbControlTransfer.TransferFlags); //should be 8 for default
+			Urb->UrbControlTransfer.TransferFlags |= USBD_DEFAULT_PIPE_TRANSFER;
+			LOG_INFO("Modified flags: %x", Urb->UrbControlTransfer.TransferFlags);
+			ForwardRequestToFDO(Request); // let the parent handle so no conflicting requests on same pipe
+		}
+		else {
+			ForwardRequestBeyondFDO(Request);
+		}
 		break;
 	case URB_FUNCTION_ABORT_PIPE:
 	case URB_FUNCTION_GET_CURRENT_FRAME_NUMBER:
@@ -47,17 +56,17 @@ VOID UrbCompleteDispatch(
 		LOG_INFO("returned descriptor!");
 		break;
 	case URB_FUNCTION_GET_DESCRIPTOR_FROM_ENDPOINT:
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 		LOG_INFO("return endpoint descriptor");
 		break;
 	case URB_FUNCTION_GET_DESCRIPTOR_FROM_INTERFACE:
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 		LOG_INFO("return interface descriptor");
 		break;
 	case URB_FUNCTION_SET_DESCRIPTOR_TO_DEVICE:
 	case URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE:
 	case URB_FUNCTION_SET_DESCRIPTOR_TO_ENDPOINT:
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 		LOG_INFO("allow setting descriptors?");
 		break;
 	case URB_FUNCTION_SET_FEATURE_TO_DEVICE:
@@ -65,14 +74,14 @@ VOID UrbCompleteDispatch(
 	case URB_FUNCTION_SET_FEATURE_TO_ENDPOINT:
 	case URB_FUNCTION_SET_FEATURE_TO_OTHER:
 		LOG_INFO("allow set feature?");
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 		break;
 	case URB_FUNCTION_CLEAR_FEATURE_TO_DEVICE:
 	case URB_FUNCTION_CLEAR_FEATURE_TO_INTERFACE:
 	case URB_FUNCTION_CLEAR_FEATURE_TO_ENDPOINT:
 	case URB_FUNCTION_CLEAR_FEATURE_TO_OTHER:
 		LOG_INFO("allow clear feature?");
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 		break;
 	case URB_FUNCTION_VENDOR_DEVICE:
 	case URB_FUNCTION_VENDOR_INTERFACE:
@@ -90,11 +99,11 @@ VOID UrbCompleteDispatch(
 		break;
 	case URB_FUNCTION_GET_MS_FEATURE_DESCRIPTOR:
 		LOG_INFO("return ms feature descriptor unsupported");
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 		break;
 	default:
 		LOG_INFO("unrecognized URB has been sent!");
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 		break;
 	}
 }
@@ -112,7 +121,7 @@ VOID UrbCompleteGetDescriptorfromDevice(
 	UCHAR descriptionInd = Urb->UrbControlDescriptorRequest.Index;
 	if (!transferBuffer) {
 		LOG_ERROR("MDL (DMA?) not implemented yet!");
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
 		return;
 	}
 

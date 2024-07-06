@@ -9,13 +9,12 @@ NTSTATUS KeystoneChildQueueInitialize(
     IN WDFDEVICE Device
 );
 EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL KeystoneChildEvtIoInternalDeviceControl;
-EVT_WDF_IO_QUEUE_IO_DEFAULT KeystoneChildEvtIoDefault;
 EVT_WDF_IO_QUEUE_IO_STOP KeystoneChildEvtIoStop;
 
 VOID ForwardRequestBeyondFDO(
 	WDFREQUEST Request
 );
 
-VOID RequestIsUnsupported(
+VOID ForwardRequestToFDO(
 	WDFREQUEST Request
 );

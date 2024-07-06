@@ -137,7 +137,7 @@ NTSTATUS KeystoneEvtChildListCreateDevice(
 		return status;
 	}
 
-	LOG_INFO("Created child device, interface: %d, cur_config %d", ChildId->FunctionType, ChildId->CurrentParentConfig);
+	LOG_INFO("Created child device, function: %d, cur_config %d", ChildId->FunctionType, ChildId->CurrentParentConfig);
 	return status;
 }
 
@@ -242,10 +242,10 @@ NTSTATUS ExtractChildConfigurationDescriptor(
 	out->bNumInterfaces = ChildId->NumberOfInterfaces;
 
 	//debug
-	//for (ULONG i = 0; i < *Received; i++) {
-	//	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", ((PUCHAR)Buffer)[i]);
-	//}
-	//DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
+	for (ULONG i = 0; i < *Received; i++) {
+		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", ((PUCHAR)Buffer)[i]);
+	}
+	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
 
 	return STATUS_SUCCESS;
 }

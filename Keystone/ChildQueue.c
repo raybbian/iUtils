@@ -21,7 +21,6 @@ NTSTATUS KeystoneChildQueueInitialize(
 	);
 
 	queueConfig.EvtIoInternalDeviceControl = KeystoneChildEvtIoInternalDeviceControl;
-	queueConfig.EvtIoDefault = KeystoneChildEvtIoDefault;
 	queueConfig.EvtIoStop = KeystoneChildEvtIoStop;
 
 	WDFQUEUE queue;
@@ -39,15 +38,6 @@ NTSTATUS KeystoneChildQueueInitialize(
 	LOG_INFO("queue created");
 
 	return status;
-}
-
-VOID KeystoneChildEvtIoDefault(
-	WDFQUEUE Queue,
-	WDFREQUEST Request
-) {
-	UNREFERENCED_PARAMETER(Queue);
-	LOG_INFO("Default io handle"); //for debug purposes
-	RequestIsUnsupported(Request);
 }
 
 VOID KeystoneChildEvtIoInternalDeviceControl(
@@ -68,7 +58,7 @@ VOID KeystoneChildEvtIoInternalDeviceControl(
 	}
 	default:
 		LOG_ERROR("IOCTL %u not implemented yet!", IoControlCode);
-		RequestIsUnsupported(Request);
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
 		break;
 	}
 }
@@ -95,8 +85,14 @@ VOID ForwardRequestBeyondFDO(
 		WdfRequestComplete(Request, WdfRequestGetStatus(Request));
 }
 
-VOID RequestIsUnsupported(
+VOID ForwardRequestToFDO(
 	WDFREQUEST Request
 ) {
-	WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
+	LOG_INFO("Forwarding to parent");
+	WDFDEVICE Device = WdfPdoGetParent(WdfIoQueueGetDevice(WdfRequestGetIoQueue(Request)));
+	WDF_REQUEST_FORWARD_OPTIONS options;
+	WDF_REQUEST_FORWARD_OPTIONS_INIT(&options);
+	NTSTATUS status = WdfRequestForwardToParentDeviceIoQueue(Request, WdfDeviceGetDefaultQueue(Device), &options);
+	if (!NT_SUCCESS(status))
+		WdfRequestComplete(Request, status);
 }
