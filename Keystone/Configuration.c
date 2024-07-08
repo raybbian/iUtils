@@ -2,6 +2,7 @@
 #include "configuration.h"
 #include "log.h"
 #include "urbsend.h"
+#include <usbioctl.h>
 
 NTSTATUS GetCurrentConfiguration(
 	IN PIU_DEVICE Dev,
@@ -228,10 +229,10 @@ NTSTATUS SetConfigurationByValue(
 
 	LOG_INFO("Set configuration to %d", Value);
 
-	for (USHORT i = 0; i < Dev->Config.Descriptor->wTotalLength; i++) {
-		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", Dev->Config.Buffer[i]);
-	}
-	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
+	//for (USHORT i = 0; i < Dev->Config.Descriptor->wTotalLength; i++) {
+	//	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", Dev->Config.Buffer[i]);
+	//}
+	//DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
 
 Cleanup:
 	if (interfaces)

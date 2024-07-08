@@ -21,7 +21,7 @@ NTSTATUS ActivatePTPFunction(
 		USB_DEVICE_PROTOCOL_PTP
 	);
 	if (!ptpDesc) {
-		LOG_INFO("Failed to get interface for apple PTP, continuing");
+		LOG_INFO("Failed to get interface for apple PTP");
 		return STATUS_NOT_SUPPORTED;
 	}
 
@@ -80,7 +80,7 @@ NTSTATUS ActivateUsbMuxFunction(
 		APPLE_USBMUX_PROTOCOL
 	);
 	if (!usbmuxDesc) {
-		LOG_INFO("Failed to get interface for apple usbmux, continuing");
+		LOG_INFO("Failed to get interface for apple usbmux");
 		return STATUS_NOT_SUPPORTED;
 	}
 
@@ -141,7 +141,7 @@ NTSTATUS ActivateCdcNcmFunction(
 		-1
 	);
 	if (!cdcControlDesc) {
-		LOG_INFO("Failed to get interface for cdc control desc, continuing");
+		LOG_INFO("Failed to get interface for cdc control desc");
 		return STATUS_NOT_SUPPORTED;
 	}
 
@@ -181,12 +181,12 @@ NTSTATUS ActivateCdcNcmFunction(
 		sizeof(IU_CHILD_IDENTIFIER)
 	);
 	cdcNcmId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
-	cdcNcmId.FunctionType = APPLE_FUNCTION_CDC_NCM;
+	cdcNcmId.FunctionType = APPLE_FUNCTION_NETWORK;
 	cdcNcmId.NumberOfInterfaces = 2;
 	cdcNcmId.NumberOfCompatibleIds = 6;
 	cdcNcmId.InterfacesUsed[0] = cdcControlDesc->bInterfaceNumber;
 	cdcNcmId.InterfacesUsed[1] = (UCHAR)dataInterfaceNum;
-	RtlInitUnicodeString(&cdcNcmId.HardwareId, L"USB\\VID_05AC&PID_12AB&MI_02");
+	RtlInitUnicodeString(&cdcNcmId.HardwareId, L"USB\\VID_05AC&PID_12AB&MI_99");
 	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[0], L"USB\\COMPAT_VID_05ac&Class_02&SubClass_0D&Prot_00");
 	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[1], L"USB\\COMPAT_VID_05ac&Class_02&SubClass_0D");
 	RtlInitUnicodeString(&cdcNcmId.CompatibleIds[2], L"USB\\COMPAT_VID_05ac&Class_02");

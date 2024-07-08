@@ -10,17 +10,20 @@ NTSTATUS SetAppleMode(
 	IN APPLE_CONNECTION_MODE Mode
 ) {
 	NTSTATUS status = STATUS_SUCCESS;
-	if (Mode < 1 || Mode > 3) {
-		LOG_ERROR("trying to set invalid apple mode");
+	if (Mode < 1 || Mode > 4) {
+		LOG_ERROR("trying to set invalid mode: %d", Mode);
 		return STATUS_INVALID_PARAMETER;
 	}
 
 	LOG_INFO("Trying to set apple device into new mode: %d", Mode);
 	APPLE_CONNECTION_MODE curMode = GetAppleMode(Dev);
 	if (!NT_SUCCESS(status)) {
-		LOG_ERROR("Failed to get current mode, continuing anyways");
+		LOG_ERROR("Failed to get current mode");
+		return STATUS_UNSUCCESSFUL;
 	}
-	else if (curMode == Mode) {
+	LOG_INFO("Cur mode is %d", curMode);
+
+	if (curMode == Mode) {
 		LOG_INFO("Device already set to mode %d", Mode);
 		return status;
 	}
@@ -46,7 +49,7 @@ NTSTATUS SetAppleMode(
 
 	LOG_INFO("%d bytes received", urb.UrbControlVendorClassRequest.TransferBufferLength);
 	if (ret != 0) {
-		LOG_INFO("Unexpected response from device. Is device already in current mode?");
+		LOG_INFO("Unexpected response from device.");
 		return STATUS_UNSUCCESSFUL;
 	}
 	Dev->AppleMode = Mode;
@@ -57,27 +60,30 @@ APPLE_CONNECTION_MODE GetAppleMode(
 	IN PIU_DEVICE Dev
 ) {
 	NTSTATUS status = STATUS_SUCCESS;
-	APPLE_CONNECTION_MODE out;
-	if (Dev->DeviceDescriptor.bNumConfigurations <= 4) {
-		out = APPLE_MODE_INITIAL;
+	APPLE_CONNECTION_MODE out = APPLE_MODE_UNKNOWN;
+
+	if (Dev->DeviceDescriptor.bNumConfigurations < 4) {
 		goto Cleanup;
 	}
-	if (Dev->DeviceDescriptor.bNumConfigurations > 5) {
-		out = APPLE_MODE_UNKNOWN;
+	if (Dev->DeviceDescriptor.bNumConfigurations == 4) {
+		out = APPLE_MODE_BASE;
+		goto Cleanup;
+	}
+	if (Dev->DeviceDescriptor.bNumConfigurations == 7) {
+		out = APPLE_MODE_BASE_NETWORK_TETHER_VALERIA;
 		goto Cleanup;
 	}
 
 	ULONG configLen;
 	UCHAR buf[IU_MAX_CONFIGURATION_BUFFER_SIZE];
-	status = GetConfigDescriptorByValue(Dev, buf, sizeof(buf), 5, &configLen);
+	//get largest configurtaion descriptor (its value matches number of configs)
+	status = GetConfigDescriptorByValue(Dev, buf, sizeof(buf), Dev->DeviceDescriptor.bNumConfigurations, &configLen);
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Could not get configuration descriptor 5 for query apple mode");
-		out = APPLE_MODE_UNKNOWN;
 		goto Cleanup;
 	}
 	if (((PUSB_CONFIGURATION_DESCRIPTOR)buf)->wTotalLength > IU_MAX_CONFIGURATION_BUFFER_SIZE) {
 		LOG_ERROR("Device config is too big!");
-		out = APPLE_MODE_UNKNOWN;
 		goto Cleanup;
 	}
 
@@ -112,30 +118,40 @@ APPLE_CONNECTION_MODE GetAppleMode(
 		APPLE_VALERIA_PROTOCOL
 	);
 
-	if (valeria && usbMux)
-		out = APPLE_MODE_VALERIA;
-	else if (cdcNcm && usbMux)
-		out = APPLE_MODE_NETWORK;
-	else
-		out = APPLE_MODE_UNKNOWN;
+	PUSB_INTERFACE_DESCRIPTOR tether = USBD_ParseConfigurationDescriptorEx(
+		confDesc,
+		confDesc,
+		-1,
+		-1,
+		USB_DEVICE_CLASS_VENDOR_SPECIFIC,
+		APPLE_TETHER_SUBCLASS,
+		APPLE_TETHER_PROTOCOL
+	);
+
+	switch (Dev->DeviceDescriptor.bNumConfigurations) {
+	case 5: 
+		if (valeria && usbMux) {
+			out = APPLE_MODE_BASE_VALERIA;
+			goto Cleanup;
+		}
+		if (cdcNcm && usbMux) {
+			out = APPLE_MODE_BASE_NETWORK;
+			goto Cleanup;
+		}
+		break;
+	case 6: 
+		if (valeria && usbMux) {
+			out = APPLE_MODE_BASE_NETWORK_VALERIA;
+			goto Cleanup;
+		}
+		if (tether && cdcNcm && usbMux) {
+			out = APPLE_MODE_BASE_NETWORK_TETHER;
+			goto Cleanup;
+		}
+	}
 
 Cleanup:
 	Dev->AppleMode = out;
 	LOG_INFO("Device is in apple mode %d", out);
 	return out;
-}
-
-UCHAR GetDesiredConfigurationFromAppleMode(
-	APPLE_CONNECTION_MODE Mode
-) {
-	switch (Mode) {
-	case APPLE_MODE_NETWORK:
-	case APPLE_MODE_VALERIA:
-		return 5;
-	case APPLE_MODE_INITIAL:
-		return 4;
-	default:
-		LOG_INFO("Getting desired configuration for bad mode");
-		return 0;
-	}
 }

@@ -1,14 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
-    </Filter>
-    <Filter Include="Driver Files">
-      <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
-      <Extensions>inf;inv;inx;mof;mc;</Extensions>
-    </Filter>
     <Filter Include="1. Communication w/ USB Stack Below">
       <UniqueIdentifier>{a1d3523b-5283-4367-8d59-99c5eb0a97be}</UniqueIdentifier>
     </Filter>
@@ -21,18 +13,26 @@
     <Filter Include="2. Communication with User Configurator">
       <UniqueIdentifier>{9a2f7a8c-6d6d-44b5-b9b7-f0c4126f6950}</UniqueIdentifier>
     </Filter>
+    <Filter Include="5. Public Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="6. Driver Files">
+      <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
+      <Extensions>inf;inv;inx;mof;mc;</Extensions>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Inf Include="Keystone.inf">
-      <Filter>Driver Files</Filter>
+      <Filter>6. Driver Files</Filter>
     </Inf>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public.h">
-      <Filter>Header Files</Filter>
+      <Filter>5. Public Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Log.h">
-      <Filter>Header Files</Filter>
+      <Filter>5. Public Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Apple.h">
       <Filter>1. Communication w/ USB Stack Below</Filter>
@@ -63,6 +63,9 @@
     </ClInclude>
     <ClInclude Include="Queue.h">
       <Filter>2. Communication with User Configurator</Filter>
+    </ClInclude>
+    <ClInclude Include="Capabilities.h">
+      <Filter>5. Public Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

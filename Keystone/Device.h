@@ -5,10 +5,15 @@
 #define IU_MAX_INTERFACE_NUMBER 8
 #define IU_MAX_NUMBER_OF_ENDPOINTS_PER_INTERFACE 4
 #define IU_MAX_CONFIGURATION_BUFFER_SIZE 512
+#define IU_MAX_UDID_LENGTH 60
 
 //Device extension
 typedef struct _IU_DEVICE {
 	WDFDEVICE Self;
+	WCHAR Udid[IU_MAX_UDID_LENGTH];
+	WDFDRIVER Driver;
+	UCHAR DeviceNum;
+
 	WDFUSBDEVICE Handle; //this even gonna be used? can't set alternate configurations with it...
 	USB_DEVICE_DESCRIPTOR DeviceDescriptor;
 
@@ -48,6 +53,7 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, DeviceGetContext);
 
 // Creation
 NTSTATUS KeystoneCreateDevice(
+	IN WDFDRIVER Driver,
 	INOUT PWDFDEVICE_INIT DeviceInit
 );
 

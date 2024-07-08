@@ -30,14 +30,16 @@ VOID KeystoneEvtChildListScanForChildren(
 	WDFDEVICE ParentDevice = WdfChildListGetDevice(ChildList);
 	PIU_DEVICE Dev = DeviceGetContext(ParentDevice);
 
+	PIU_DEVICE_STORE deviceStore = DriverGetContext(Dev->Driver);
+	if (InterlockedAdd(&deviceStore->Devices[Dev->DeviceNum].DeviceState, 0) != IU_DEVICE_OPERATIONAL) {
+		LOG_INFO("Device not operational yet, cancelling scan");
+		return;
+	}
+
 	LOG_INFO("Scanning for new children");
 
 	if (Dev->AppleMode == APPLE_MODE_UNKNOWN) {
 		LOG_INFO("Cannot scan for child devices with unknown apple mode");
-		return;
-	}
-	if (Dev->Config.Descriptor->bConfigurationValue != GetDesiredConfigurationFromAppleMode(Dev->AppleMode)) {
-		LOG_INFO("Device not in correct configuration for this apple mode");
 		return;
 	}
 
@@ -45,9 +47,7 @@ VOID KeystoneEvtChildListScanForChildren(
 
 	ActivatePTPFunction(Dev, ChildList);
 	ActivateUsbMuxFunction(Dev, ChildList); 
-	if (Dev->AppleMode == APPLE_MODE_NETWORK) {
-		ActivateCdcNcmFunction(Dev, ChildList);
-	}
+	ActivateCdcNcmFunction(Dev, ChildList);
 	//TODO: others
 
 	WdfChildListEndScan(ChildList);
@@ -242,10 +242,10 @@ NTSTATUS ExtractChildConfigurationDescriptor(
 	out->bNumInterfaces = ChildId->NumberOfInterfaces;
 
 	//debug
-	for (ULONG i = 0; i < *Received; i++) {
-		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", ((PUCHAR)Buffer)[i]);
-	}
-	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
+	//for (ULONG i = 0; i < *Received; i++) {
+	//	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", ((PUCHAR)Buffer)[i]);
+	//}
+	//DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
 
 	return STATUS_SUCCESS;
 }

@@ -17,7 +17,7 @@ NTSTATUS DriverEntry(
 	LOG_INFO("Driver entry");
 
 	WDF_OBJECT_ATTRIBUTES attributes;
-	WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, DRIVER_CONTEXT);
 	attributes.EvtCleanupCallback = KeystoneEvtDriverContextCleanup;
 
 	WDF_DRIVER_CONFIG config;
@@ -42,12 +42,11 @@ NTSTATUS KeystoneEvtDeviceAdd(
 	INOUT PWDFDEVICE_INIT DeviceInit
 ) {
 	NTSTATUS status;
-	UNREFERENCED_PARAMETER(Driver);
 	PAGED_CODE();
 
 	LOG_INFO("Device add");
 
-	status = KeystoneCreateDevice(DeviceInit);
+	status = KeystoneCreateDevice(Driver, DeviceInit);
 
 	return status;
 }

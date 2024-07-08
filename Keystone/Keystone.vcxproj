@@ -32,6 +32,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Apple.h" />
+    <ClInclude Include="Capabilities.h" />
     <ClInclude Include="Child.h" />
     <ClInclude Include="Configuration.h" />
     <ClInclude Include="Device.h" />

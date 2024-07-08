@@ -31,11 +31,8 @@ VOID UrbCompleteDispatch(
 			LOG_INFO("Transfer flags: %x", Urb->UrbControlTransfer.TransferFlags); //should be 8 for default
 			Urb->UrbControlTransfer.TransferFlags |= USBD_DEFAULT_PIPE_TRANSFER;
 			LOG_INFO("Modified flags: %x", Urb->UrbControlTransfer.TransferFlags);
-			ForwardRequestToFDO(Request); // let the parent handle so no conflicting requests on same pipe
 		}
-		else {
-			ForwardRequestBeyondFDO(Request);
-		}
+		ForwardRequestBeyondFDO(Request);
 		break;
 	case URB_FUNCTION_ABORT_PIPE:
 	case URB_FUNCTION_GET_CURRENT_FRAME_NUMBER:
