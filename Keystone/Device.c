@@ -58,17 +58,28 @@ NTSTATUS KeystoneCreateDevice(
 
 	//find device num
 	PIU_DEVICE_STORE deviceStore = DriverGetContext(Driver);
-	UCHAR deviceNum = 0;
-	for (; deviceNum < IU_MAX_NUMBER_OF_DEVICES; deviceNum++) {
-		if (deviceStore->Devices[deviceNum].Udid == NULL)
-			continue;
-		if (wcscmp(deviceStore->Devices[deviceNum].Udid, udid) == 0) {
+	LONG deviceNum = -1;
+	for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
+		if (wcscmp(deviceStore->Devices[i].Udid, udid) == 0) {
 			LOG_INFO("Device was reconnected");
+			deviceNum = i;
 			break;
 		}
-		LOG_INFO("Found spot for device: %d", deviceNum);
-		wcscpy(deviceStore->Devices[deviceNum].Udid, udid);
-		break;
+	}
+	if (deviceNum == -1) {
+		LOG_INFO("Device is new connection");
+		for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
+			if (deviceStore->Devices[i].Udid == NULL) {
+				LOG_INFO("Found spot for device");
+				deviceNum = i;
+				wcscpy(deviceStore->Devices[i].Udid, udid);
+				break;
+			}
+		}
+	}
+	if (deviceNum == -1) {
+		LOG_ERROR("Too many devices attached to this driver!");
+		return STATUS_UNSUCCESSFUL;
 	}
 
 	//create WDF device
@@ -84,7 +95,7 @@ NTSTATUS KeystoneCreateDevice(
 	RtlZeroMemory(dev, sizeof(IU_DEVICE));
 	dev->Self = device;
 	dev->Driver = Driver;
-	dev->DeviceNum = deviceNum;
+	dev->DeviceNum = (UCHAR)deviceNum;
 	wcscpy(dev->Udid, udid);
 
 	// init queue (has side effect of setting correct stack size for child pdo forwarding ?)
@@ -251,7 +262,7 @@ NTSTATUS KeystoneEvtDeviceD0Exit(
 		return STATUS_SUCCESS;
 	}
 
-	InterlockedExchange(&deviceStore->Devices[Dev->DeviceNum].DeviceState, IU_DEVICE_DISCONNECTED);
+	RtlZeroMemory(&deviceStore->Devices[Dev->DeviceNum], sizeof(deviceStore->Devices[Dev->DeviceNum]));
 	LOG_INFO("Marking device as disconnected");
 	return STATUS_SUCCESS;
 }

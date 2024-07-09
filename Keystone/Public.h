@@ -10,7 +10,9 @@ DEFINE_GUID (GUID_DEVINTERFACE_Keystone,
 #define OUT _Out_
 #define INOUT _Inout_
 #define INOPT _In_opt_
+#define INOUTOPT _Inout_opt_
 
+#define IU_MAX_NUMBER_OF_DEVICES 8
 #define IU_NUMBER_OF_APPLE_MODES 7
 #define IU_MAX_NUMBER_OF_CONFIGURATIONS 7
 #define IU_NUMBER_OF_FEATURES 6

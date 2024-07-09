@@ -10,7 +10,6 @@
 
 #include "device.h"
 
-#define IU_MAX_NUMBER_OF_DEVICES 8
 #define IU_ALLOC_CONFIG_POOL 'fnoc'
 
 typedef enum _IU_DEVICE_STATE {
