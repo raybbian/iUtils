@@ -1,27 +1,31 @@
 #include "pch.h"
 #include "messenger.h"
+#include "utils.h"
 
 CONFIGRET AddDevice(
 	PMESSENGER_CONTEXT MSGContext,
 	PWCHAR SymbolicLink
 ) {
 	CONFIGRET ret = CR_SUCCESS;
-	if (wcslen(SymbolicLink) > MAX_PATH)
-		return CR_BUFFER_SMALL;
+
+	MSG_DEBUG(L"[IU] Adding Device %ws\n", SymbolicLink);
 
 	if (GetDeviceIndex(MSGContext, SymbolicLink) != -1) {
-		//device already exists
+		MSG_DEBUG(L"[IU] Tried to add device that already exists\n");
 		return CR_ALREADY_SUCH_DEVNODE;
 	}
 
 	LONG ind = FindEmptyDeviceIndex(MSGContext, SymbolicLink);
-	if (ind == -1)
+	if (ind == -1) {
+		MSG_DEBUG(L"[IU] There are too many device being used!\n");
 		return CR_BUFFER_SMALL;
-	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext = &MSGContext->Devices[ind];
+	}
 
+	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext = &MSGContext->Devices[ind];
 	// fill Symbolic Link
-	MSGDeviceContext->SymbolicLink = HeapAlloc(GetProcessHeap(), 0, wcslen(SymbolicLink));
+	MSGDeviceContext->SymbolicLink = HeapAlloc(GetProcessHeap(), 0, wcslen(SymbolicLink) * sizeof(WCHAR));
 	if (!MSGDeviceContext->SymbolicLink) {
+		MSG_DEBUG(L"[IU] Could not allocate memory for symbolic link string\n");
 		RemoveDevice(MSGDeviceContext);
 		return CR_OUT_OF_MEMORY;
 	}
@@ -29,13 +33,17 @@ CONFIGRET AddDevice(
 
 	//init lock
 	InitializeCriticalSection(&MSGDeviceContext->Lock);
+	MSGDeviceContext->LockInitialized = TRUE;
 
 	//init threadpool for unreg
-	MSGDeviceContext->pWork = CreateThreadpoolWork(UnregisterCallback, MSGDeviceContext, NULL);
+	MSGDeviceContext->pWork = CreateThreadpoolWork(UnregisterDeviceHandleCallbackAsync, MSGDeviceContext, NULL);
 	if (!MSGDeviceContext->pWork) {
+		MSG_DEBUG(L"[IU] Could not initialize threadpool for async unregister\n");
 		RemoveDevice(MSGDeviceContext);
 		return CR_FAILURE;
 	}
+
+	MSG_DEBUG(L"[IU] Opening device handle for device %ws\n", SymbolicLink);
 
 	// Open device handle
 	MSGDeviceContext->DeviceHandle = CreateFile(
@@ -48,9 +56,12 @@ CONFIGRET AddDevice(
 		NULL
 	);
 	if (MSGDeviceContext->DeviceHandle == INVALID_HANDLE_VALUE) {
+		MSG_DEBUG(L"[IU] Could not open device handle\n");
 		RemoveDevice(MSGDeviceContext);
 		return CR_DEVICE_NOT_THERE;
 	}
+
+	MSG_DEBUG(L"[IU] Setting up handle notifications for device %ws\n", SymbolicLink);
 
 	// set up handle notifications
 	CM_NOTIFY_FILTER filter = { 0 };
@@ -64,9 +75,12 @@ CONFIGRET AddDevice(
 		&MSGContext->Devices[ind].HandleNotifications
 	);
 	if (ret != CR_SUCCESS) {
+		MSG_DEBUG(L"[IU] Could not register device for handle notifications\n");
 		RemoveDevice(MSGDeviceContext);
 		return ret;
 	}
+
+	MSG_DEBUG(L"[IU] Successfully added device %ws\n", SymbolicLink);
 
 	return ret;
 }
@@ -75,11 +89,14 @@ VOID RemoveDevice( //CALLED OUTSIDE OF USB HANDLE CALLBACK
 	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext
 ) {
 	// close device handle
-	if (MSGDeviceContext->DeviceHandle)
+	if (MSGDeviceContext->DeviceHandle) {
+		MSG_DEBUG(L"[IU] Closing device handle");
 		CloseHandle(MSGDeviceContext->DeviceHandle);
+	}
 
 	// unregister for notifs, if was marked by callback to unregister, let it do that
 	if (MSGDeviceContext->HandleNotifications) {
+		MSG_DEBUG(L"[IU] Unregistering notifications\n");
 		BOOL callbackUnregister = FALSE;
 		EnterCriticalSection(&MSGDeviceContext->Lock);
 		if (MSGDeviceContext->ShouldUnregister)
@@ -93,15 +110,22 @@ VOID RemoveDevice( //CALLED OUTSIDE OF USB HANDLE CALLBACK
 	}
 
 	// close work thread pool
-	if (MSGDeviceContext->pWork)
+	if (MSGDeviceContext->pWork) {
+		MSG_DEBUG(L"[IU] Closing thread pool\n");
 		CloseThreadpoolWork(MSGDeviceContext->pWork);
+	}
 
 	// delete critical section
-	DeleteCriticalSection(&MSGDeviceContext->Lock);
+	if (MSGDeviceContext->LockInitialized) {
+		DeleteCriticalSection(&MSGDeviceContext->Lock);
+		MSGDeviceContext->LockInitialized = FALSE;
+	}
 
 	// free symlink string
-	if (MSGDeviceContext->SymbolicLink)
+	if (MSGDeviceContext->SymbolicLink) {
+		MSG_DEBUG(L"[IU] Freeing device symlink\n");
 		HeapFree(GetProcessHeap(), 0, MSGDeviceContext->SymbolicLink);
+	}
 
 	// reset ShouldRegister
 	memset(MSGDeviceContext, 0, sizeof(MESSENGER_DEVICE_CONTEXT));
@@ -120,13 +144,15 @@ DWORD WINAPI USBHandleCallback(
 
 	switch (Action) {
 	case CM_NOTIFY_ACTION_DEVICEQUERYREMOVE:
+		MSG_DEBUG(L"[IU] Handling device query remove\n");
 		if (MSGDeviceContext->DeviceHandle)
 			CloseHandle(MSGDeviceContext->DeviceHandle);
 		break;
 	case CM_NOTIFY_ACTION_DEVICEQUERYREMOVEFAILED:
 		//unregister and wait
+		MSG_DEBUG(L"[IU] Handling device query remove failed\n");
 		if (MSGDeviceContext->HandleNotifications) {
-			UnregisterDeviceFromWithinHandleCallback(MSGDeviceContext);
+			UnregisterDeviceFromHandleCallbackContext(MSGDeviceContext);
 			WaitForThreadpoolWorkCallbacks(MSGDeviceContext->pWork, FALSE);
 		}
 
@@ -144,8 +170,10 @@ DWORD WINAPI USBHandleCallback(
 			FILE_ATTRIBUTE_NORMAL,
 			NULL
 		);
-		if (MSGDeviceContext->DeviceHandle == INVALID_HANDLE_VALUE)
+		if (MSGDeviceContext->DeviceHandle == INVALID_HANDLE_VALUE) {
+			MSG_DEBUG(L"[IU] Failed to reopen device handle\n");
 			goto Cleanup;
+		}
 
 		// re-register notifications
 		CM_NOTIFY_FILTER filter = { 0 };
@@ -159,13 +187,15 @@ DWORD WINAPI USBHandleCallback(
 			&MSGDeviceContext->HandleNotifications
 		);
 		if (ret != CR_SUCCESS) {
+			MSG_DEBUG(L"[IU] Failed to reregister for device handle notifications\n");
 			CloseHandle(MSGDeviceContext->DeviceHandle);
 			goto Cleanup;
 		}
 		break;
 	case CM_NOTIFY_ACTION_DEVICEREMOVEPENDING:
 	case CM_NOTIFY_ACTION_DEVICEREMOVECOMPLETE:
-		UnregisterDeviceFromWithinHandleCallback(MSGDeviceContext);
+		MSG_DEBUG(L"[IU] Handling device remove action\n");
+		UnregisterDeviceFromHandleCallbackContext(MSGDeviceContext);
 		if (MSGDeviceContext->DeviceHandle)
 			CloseHandle(MSGDeviceContext->DeviceHandle);
 		break;
@@ -188,10 +218,15 @@ DWORD WINAPI USBInterfaceCallback( // when devices added or removed
 
 	switch (Action) {
 	case CM_NOTIFY_ACTION_DEVICEINTERFACEARRIVAL:
+		MSG_DEBUG(L"[IU] Found new device! Adding...\n");
 		AddDevice(MSGContext, symbolicLink);
 		break;
 	case CM_NOTIFY_ACTION_DEVICEINTERFACEREMOVAL:
-		if (deviceInd == -1) goto Cleanup;
+		MSG_DEBUG(L"[IU] Removing device...\n");
+		if (deviceInd == -1) {
+			MSG_DEBUG(L"[IU] Device to be removed not found!\n");
+			goto Cleanup;
+		}
 		RemoveDevice(&MSGContext->Devices[deviceInd]);
 		break;
 	}
@@ -202,6 +237,7 @@ Cleanup:
 CONFIGRET RegisterInterfaceNotifications(
 	IN PMESSENGER_CONTEXT MSGContext
 ) {
+	MSG_DEBUG(L"[IU] Registering for interface notifications...\n");
 	CM_NOTIFY_FILTER filter = { 0 };
 	filter.cbSize = sizeof(filter);
 	filter.FilterType = CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE;
@@ -210,29 +246,148 @@ CONFIGRET RegisterInterfaceNotifications(
 }
 
 CONFIGRET RetrieveExistingDevices(
-	OUT PVOID Buffer,
-	IN ULONG BufferLen,
-	OUT PULONG ReqLen
+	INOUT PMESSENGER_CONTEXT MSGContext
 ) {
+	MSG_DEBUG(L"[IU] Retrieving existing devices\n");
 	CONFIGRET ret;
 
+	LONG reqLen = 0;
 	ret = CM_Get_Device_Interface_List_Size(
-		ReqLen,
+		&reqLen,
 		&GUID_DEVINTERFACE_Keystone,
 		NULL,
 		CM_GET_DEVICE_INTERFACE_LIST_PRESENT
 	);
-	if (ret != CR_SUCCESS)
+	if (ret != CR_SUCCESS) {
+		MSG_DEBUG(L"[IU] Failed to get interface list size\n");
 		return ret;
+	}
+	MSG_DEBUG(L"[IU] Interface list size is %d\n", reqLen);
 
-	if (*ReqLen > BufferLen) 
-		return CR_BUFFER_SMALL;
+	PWCHAR buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, reqLen);
+	if (!buf) {
+		MSG_DEBUG(L"[IU] Failed to allocate memory for interface list\n");
+		ret = CR_OUT_OF_MEMORY;
+		goto Cleanup;
+	}
 
-	return CM_Get_Device_Interface_List(
+	ret = CM_Get_Device_Interface_List(
 		&GUID_DEVINTERFACE_Keystone,
 		NULL,
-		Buffer,
-		BufferLen,
+		buf,
+		reqLen,
 		CM_GET_DEVICE_INTERFACE_LIST_PRESENT
 	);
+	if (ret != CR_SUCCESS) {
+		MSG_DEBUG(L"[IU] Failed to get full interface list\n");
+		goto Cleanup;
+	}
+
+	PWCHAR curChar = buf;
+	while (*curChar != '\0' && reqLen > 0) {
+		ULONG strLen = wcsnlen(curChar, reqLen);
+		if (strLen == reqLen) {
+			MSG_DEBUG(L"[IU] No more devices!\n");
+			break;
+		}
+		MSG_DEBUG(L"[IU] Found device %ws\n", curChar);
+		AddDevice(MSGContext, curChar);
+		curChar += strLen + 1;
+		reqLen -= strLen + 1;
+	}
+
+Cleanup:
+	if (buf) 
+		HeapFree(GetProcessHeap(), 0, buf);
+	return ret;
+}
+
+VOID UnregisterDeviceFromHandleCallbackContext(
+	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext
+) {
+	MSG_DEBUG(L"[IU] Unregistering device from within callback context\n");
+	EnterCriticalSection(&MSGDeviceContext->Lock);
+	if (!MSGDeviceContext->ShouldUnregister) {
+		MSGDeviceContext->ShouldUnregister = TRUE;
+		SubmitThreadpoolWork(MSGDeviceContext->pWork);
+	}
+	LeaveCriticalSection(&MSGDeviceContext->Lock);
+}
+
+VOID CALLBACK UnregisterDeviceHandleCallbackAsync(
+	INOUT PTP_CALLBACK_INSTANCE Instance,
+	INOUT PVOID Context,
+	INOUT PTP_WORK pWork
+) {
+	CONFIGRET ret;
+	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext = (PMESSENGER_DEVICE_CONTEXT)Context;
+	
+	MSG_DEBUG(L"[IU] Unregistering device: inside async function\n");
+
+	EnterCriticalSection(&MSGDeviceContext->Lock);
+	if (MSGDeviceContext->ShouldUnregister) {
+		ret = CM_Unregister_Notification(MSGDeviceContext->HandleNotifications);
+		if (ret != CR_SUCCESS) {
+			MSG_DEBUG(L"[IU] Somehow failed to unregister device in async function\n");
+			goto Cleanup; //wtf
+		}
+		MSGDeviceContext->HandleNotifications = NULL;
+		MSGDeviceContext->ShouldUnregister = FALSE;
+	}
+Cleanup:
+	LeaveCriticalSection(&MSGDeviceContext->Lock);
+}
+
+BOOLEAN SendDeviceIoctl(
+	IN PMESSENGER_CONTEXT MSGContext,
+	IN LONG DeviceInd,
+	IN DWORD IoctlCode,
+	INOPT PVOID InputBuffer,
+	IN ULONG InputBufferLen,
+	INOPT PVOID OutputBuffer,
+	IN ULONG OutputBufferLen
+) {
+	if (MSGContext == NULL) {
+		MSG_DEBUG(L"[IU] Bad MSG Context\n");
+		return FALSE;
+	}
+
+	if (MSGContext->Devices[DeviceInd].SymbolicLink == NULL) {
+		MSG_DEBUG(L"[IU] No such device\n");
+		return FALSE;
+	}
+
+	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext = &MSGContext->Devices[DeviceInd];
+	if (!MSGDeviceContext->DeviceHandle) {
+		MSG_DEBUG(L"[IU] Device does not have open handle\n");
+		return FALSE;
+	}
+
+	EnterCriticalSection(&MSGDeviceContext->Lock);
+
+	if (MSGDeviceContext->ShouldUnregister) {
+		MSG_DEBUG(L"[IU] Device is pending removal\n");
+		LeaveCriticalSection(&MSGDeviceContext->Lock);
+		return FALSE;
+	}
+	
+	ULONG ret;
+	BOOL sent = DeviceIoControl(
+		MSGDeviceContext->DeviceHandle,
+		IoctlCode,
+		InputBuffer,
+		InputBufferLen,
+		OutputBuffer,
+		OutputBufferLen,
+		&ret,
+		0
+	);
+
+	LeaveCriticalSection(&MSGDeviceContext->Lock);
+
+	if (!sent) {
+		MSG_DEBUG(L"[IU] Failed to send device IOCTL\n");
+		return FALSE;
+	}
+	return TRUE;
 }

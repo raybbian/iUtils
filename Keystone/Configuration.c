@@ -3,6 +3,7 @@
 #include "log.h"
 #include "urbsend.h"
 #include <usbioctl.h>
+#include "child.h"
 
 NTSTATUS GetCurrentConfiguration(
 	IN PIU_DEVICE Dev,
@@ -113,7 +114,7 @@ NTSTATUS GetConfigDescriptorByValue(
 	return ntStatus;
 }
 
-NTSTATUS UnsetConfiguration(
+static NTSTATUS UnsetConfiguration(
 	INOUT PIU_DEVICE Dev
 ) {
 	NTSTATUS status = STATUS_SUCCESS;
@@ -138,33 +139,39 @@ NTSTATUS SetConfigurationByValue(
 	INOUT PIU_DEVICE Dev,
 	IN UCHAR Value
 ) {
-	NTSTATUS status = STATUS_SUCCESS; 
-
 	if (Dev->Config.Descriptor && Dev->Config.Descriptor->bConfigurationValue == Value) {
 		LOG_INFO("Configuration already set to value");
 		return STATUS_SUCCESS;
 	}
 
+	NTSTATUS status = STATUS_SUCCESS; 
+	PURB urbp = NULL;
+	PUSBD_INTERFACE_LIST_ENTRY interfaces = NULL;
+
+	PurgeAllChildQueuesSynchronously(Dev);
+	MarkAllChildrenAsMissing(Dev);
+
 	if (Value == 0) { //deconfigure
 		LOG_INFO("Resetting configuration");
-		return UnsetConfiguration(Dev);
+		status = UnsetConfiguration(Dev);
+		goto Cleanup;
 	}
 	
 	ULONG configLen;
 	status = GetConfigDescriptorByValue(Dev, Dev->Config.Buffer, sizeof(Dev->Config.Buffer), Value, &configLen);
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Could not get configuration descriptor for set config");
-		return status;
+		goto Cleanup;
 	}
 	if (((PUSB_CONFIGURATION_DESCRIPTOR)Dev->Config.Buffer)->wTotalLength > IU_MAX_CONFIGURATION_BUFFER_SIZE) {
 		LOG_ERROR("Device config is too big!");
-		return STATUS_BUFFER_TOO_SMALL;
+		status = STATUS_BUFFER_TOO_SMALL;
+		goto Cleanup;
 	}
 	Dev->Config.Descriptor = (PUSB_CONFIGURATION_DESCRIPTOR)Dev->Config.Buffer;
 
 	LOG_INFO("Config len is %d bytes", Dev->Config.Descriptor->wTotalLength);
 
-	PUSBD_INTERFACE_LIST_ENTRY interfaces = NULL;
 	ULONG numInterfaces = Dev->Config.Descriptor->bNumInterfaces;
 	interfaces = ExAllocatePoolZero(
 		NonPagedPoolNx,
@@ -173,10 +180,10 @@ NTSTATUS SetConfigurationByValue(
 	);
 	if (!interfaces) {
 		LOG_ERROR("Interface array alloc failed");
-		return STATUS_NO_MEMORY;
+		status = STATUS_NO_MEMORY;
+		goto Cleanup;
 	}
 
-	PURB urbp = NULL;
 	PUSB_INTERFACE_DESCRIPTOR intfDesc;
 	PUCHAR startP = (PUCHAR)Dev->Config.Descriptor;
 	for (ULONG i = 0; i < numInterfaces; i++) {
@@ -239,6 +246,7 @@ Cleanup:
 		ExFreePoolWithTag(interfaces, IU_ALLOC_CONFIG_POOL);
 	if (urbp) 
 		USBD_UrbFree(Dev->WDM.Handle, urbp);
+	ActivateChildren(Dev); //activate children on this new config
 	return status;
 }
 

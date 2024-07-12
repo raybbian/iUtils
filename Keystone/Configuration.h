@@ -24,10 +24,6 @@ NTSTATUS GetConfigDescriptorByValue(
 	OUT PULONG Received
 );
 
-NTSTATUS UnsetConfiguration(
-	INOUT PIU_DEVICE Dev
-);
-
 NTSTATUS SetConfigurationByValue(
 	INOUT PIU_DEVICE Dev,
 	IN UCHAR Value

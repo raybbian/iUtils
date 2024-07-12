@@ -15,6 +15,7 @@ VOID KeystoneChildListInitialize(
 typedef struct _IU_CHILD_IDENTIFIER {
 	WDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER IdHeader;
 	APPLE_FUNCTION_TYPE FunctionType;
+	APPLE_CONNECTION_MODE CurrentParentMode;
 	UCHAR CurrentParentConfig;
 	UCHAR NumberOfInterfaces;
 	UCHAR NumberOfCompatibleIds;
@@ -56,4 +57,16 @@ NTSTATUS ExtractChildConfigurationDescriptor(
 	OUT PVOID Buffer,
 	IN ULONG BufferSize,
 	OUT PULONG Received
+);
+
+VOID PurgeAllChildQueuesSynchronously(
+	IN PIU_DEVICE Dev
+);
+
+VOID MarkAllChildrenAsMissing(
+	IN PIU_DEVICE Dev
+);
+
+VOID ActivateChildren(
+	IN PIU_DEVICE Dev
 );

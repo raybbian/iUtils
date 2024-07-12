@@ -32,6 +32,7 @@ NTSTATUS ActivatePTPFunction(
 		sizeof(IU_CHILD_IDENTIFIER)
 	);
 	ptpId.FunctionType = APPLE_FUNCTION_PTP;
+	ptpId.CurrentParentMode = Dev->AppleMode;
 	ptpId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
 	ptpId.NumberOfInterfaces = 1;
 	ptpId.NumberOfCompatibleIds = 6;
@@ -90,8 +91,9 @@ NTSTATUS ActivateUsbMuxFunction(
 		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&usbmuxId,
 		sizeof(IU_CHILD_IDENTIFIER)
 	);
-	usbmuxId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
 	usbmuxId.FunctionType = APPLE_FUNCTION_USB_MUX;
+	usbmuxId.CurrentParentMode = Dev->AppleMode;
+	usbmuxId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
 	usbmuxId.NumberOfInterfaces = 1;
 	usbmuxId.NumberOfCompatibleIds = 6;
 	usbmuxId.InterfacesUsed[0] = usbmuxDesc->bInterfaceNumber;
@@ -180,8 +182,9 @@ NTSTATUS ActivateCdcNcmFunction(
 		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&cdcNcmId,
 		sizeof(IU_CHILD_IDENTIFIER)
 	);
-	cdcNcmId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
 	cdcNcmId.FunctionType = APPLE_FUNCTION_NETWORK;
+	cdcNcmId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
+	cdcNcmId.CurrentParentMode = Dev->AppleMode;
 	cdcNcmId.NumberOfInterfaces = 2;
 	cdcNcmId.NumberOfCompatibleIds = 6;
 	cdcNcmId.InterfacesUsed[0] = cdcControlDesc->bInterfaceNumber;

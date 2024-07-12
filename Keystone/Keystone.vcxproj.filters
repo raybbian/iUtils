@@ -64,9 +64,6 @@
     <ClInclude Include="Queue.h">
       <Filter>2. Communication with User Configurator</Filter>
     </ClInclude>
-    <ClInclude Include="Capabilities.h">
-      <Filter>5. Public Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Apple.c">

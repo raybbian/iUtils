@@ -2,6 +2,10 @@
 
 #include "pch.h"
 
+#define EXPORT __declspec(dllexport)
+
+#define MSG_DEBUG(...) {WCHAR cad[512]; _snwprintf(cad, 500, __VA_ARGS__); OutputDebugString(cad);}
+
 typedef struct _MESSENGER_DEVICE_CONTEXT {
 	HCMNOTIFICATION HandleNotifications;
 	HANDLE DeviceHandle;
@@ -9,7 +13,8 @@ typedef struct _MESSENGER_DEVICE_CONTEXT {
 	PTP_WORK pWork;
 
 	PWCHAR SymbolicLink;
-	BOOL ShouldUnregister; //set to true from within callback context
+	BOOLEAN ShouldUnregister; //set to true from within callback context
+	BOOLEAN LockInitialized;
 } MESSENGER_DEVICE_CONTEXT, *PMESSENGER_DEVICE_CONTEXT; 
 
 typedef struct _MESSENGER_CONTEXT {
@@ -23,16 +28,5 @@ LONG GetDeviceIndex(
 );
 
 LONG FindEmptyDeviceIndex(
-	IN PMESSENGER_CONTEXT MSGContext,
-	IN PWCHAR SymbolicLink
-);
-
-VOID UnregisterDeviceFromWithinHandleCallback(
-	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext
-);
-
-VOID CALLBACK UnregisterCallback(
-	INOUT PTP_CALLBACK_INSTANCE Instance,
-	INOUT PVOID Context,
-	INOUT PTP_WORK pWork
+	IN PMESSENGER_CONTEXT MSGContext
 );

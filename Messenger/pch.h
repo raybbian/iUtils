@@ -15,6 +15,7 @@
 #include <cfgmgr32.h>
 #include <initguid.h>
 #include <stdlib.h>
+#include <devioctl.h>
 #include "../Keystone/Public.h"
 #endif //PCH_H
 

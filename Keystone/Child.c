@@ -3,6 +3,7 @@
 #include "log.h"
 #include "childqueue.h"
 #include "functions.h"
+#include "stdio.h"
 
 VOID KeystoneChildListInitialize(
 	IN PWDFDEVICE_INIT DeviceInit
@@ -29,30 +30,7 @@ VOID KeystoneEvtChildListScanForChildren(
 ) {
 	WDFDEVICE ParentDevice = WdfChildListGetDevice(ChildList);
 	PIU_DEVICE Dev = DeviceGetContext(ParentDevice);
-
-	PIU_DEVICE_STORE deviceStore = DriverGetContext(Dev->Driver);
-	if (InterlockedAdd(&deviceStore->Devices[Dev->DeviceNum].DeviceState, 0) != IU_DEVICE_OPERATIONAL) {
-		LOG_INFO("Device not operational yet, cancelling scan");
-		return;
-	}
-
-	LOG_INFO("Scanning for new children");
-
-	if (Dev->AppleMode == APPLE_MODE_UNKNOWN) {
-		LOG_INFO("Cannot scan for child devices with unknown apple mode");
-		return;
-	}
-
-	WdfChildListBeginScan(ChildList);
-
-	ActivatePTPFunction(Dev, ChildList);
-	ActivateUsbMuxFunction(Dev, ChildList); 
-	ActivateCdcNcmFunction(Dev, ChildList);
-	//TODO: others
-
-	WdfChildListEndScan(ChildList);
-
-	LOG_INFO("Scan ended");
+	ActivateChildren(Dev);
 }
 
 NTSTATUS KeystoneEvtChildListCreateDevice(
@@ -221,7 +199,7 @@ NTSTATUS ExtractChildConfigurationDescriptor(
 		endDesc = (PUCHAR)USBD_ParseConfigurationDescriptorEx(
 			Dev->Config.Descriptor,
 			stDesc + ((PUSB_INTERFACE_DESCRIPTOR)stDesc)->bLength,
-			-1, 
+			-1,
 			0, //altsetting
 			-1, -1, -1
 		);
@@ -248,4 +226,66 @@ NTSTATUS ExtractChildConfigurationDescriptor(
 	//DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
 
 	return STATUS_SUCCESS;
+}
+
+VOID PurgeAllChildQueuesSynchronously(
+	IN PIU_DEVICE Dev
+) {
+	LOG_INFO("Purging child queues");
+	WDFCHILDLIST childList = WdfFdoGetDefaultChildList(Dev->Self);
+	WDF_CHILD_LIST_ITERATOR iter;
+	WDF_CHILD_LIST_ITERATOR_INIT(&iter, WdfRetrievePresentChildren);
+	WdfChildListBeginIteration(childList, &iter);
+
+	NTSTATUS status;
+	WDFDEVICE childDevice;
+	while (NT_SUCCESS(status = WdfChildListRetrieveNextDevice(childList, &iter, &childDevice, NULL))) {
+		WdfIoQueuePurgeSynchronously(WdfDeviceGetDefaultQueue(childDevice));
+		LOG_INFO("Purged queue for device");
+	}
+
+	WdfChildListEndIteration(childList, &iter);
+}
+
+VOID MarkAllChildrenAsMissing(
+	IN PIU_DEVICE Dev
+) {
+	LOG_INFO("Marking all children missing");
+	WDFCHILDLIST childList = WdfFdoGetDefaultChildList(Dev->Self);
+	WdfChildListBeginScan(childList);
+	WdfChildListEndScan(childList);
+}
+
+VOID ActivateChildren(
+	IN PIU_DEVICE Dev
+) {
+	WDFCHILDLIST ChildList = WdfFdoGetDefaultChildList(Dev->Self);
+	PIU_DEVICE_STORE deviceStore = DriverGetContext(Dev->Driver);
+	if (InterlockedAdd(&deviceStore->Devices[Dev->DeviceNum].DeviceState, 0) != IU_DEVICE_OPERATIONAL) {
+		LOG_INFO("Device not operational yet, cancelling scan");
+		return;
+	}
+
+	LOG_INFO("Scanning for new children");
+
+	WdfChildListBeginScan(ChildList);
+
+	const unsigned char* capabilitiesArray = (const unsigned char*)APPLE_MODE_CAPABILITIES[Dev->AppleMode][Dev->Config.Descriptor->bConfigurationValue];
+
+	if (capabilitiesArray[0])
+		ActivatePTPFunction(Dev, ChildList);
+	if (capabilitiesArray[1])
+		; //activate audio streaming
+	if (capabilitiesArray[2])
+		ActivateUsbMuxFunction(Dev, ChildList);
+	if (capabilitiesArray[3])
+		ActivateCdcNcmFunction(Dev, ChildList);
+	if (capabilitiesArray[4])
+		; //activate mobile tethering
+	if (capabilitiesArray[5])
+		; //activate valeria
+
+	WdfChildListEndScan(ChildList);
+
+	LOG_INFO("Scan ended");
 }

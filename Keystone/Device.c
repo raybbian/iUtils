@@ -33,7 +33,7 @@ NTSTATUS KeystoneCreateDevice(
 	LOG_INFO("Device udid is %ws", udid);
 
 	// this device is root enum persistent device
-	if (wcsncmp(udid, L"ROOT", 4) == 0) { 
+	if (wcsncmp(udid, L"ROOT", 4) == 0) {
 		LOG_INFO("added persistent root device");
 		WDFDEVICE device;
 		status = WdfDeviceCreate(&DeviceInit, WDF_NO_OBJECT_ATTRIBUTES, &device);
@@ -56,32 +56,6 @@ NTSTATUS KeystoneCreateDevice(
 	//create child list
 	KeystoneChildListInitialize(DeviceInit);
 
-	//find device num
-	PIU_DEVICE_STORE deviceStore = DriverGetContext(Driver);
-	LONG deviceNum = -1;
-	for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
-		if (wcscmp(deviceStore->Devices[i].Udid, udid) == 0) {
-			LOG_INFO("Device was reconnected");
-			deviceNum = i;
-			break;
-		}
-	}
-	if (deviceNum == -1) {
-		LOG_INFO("Device is new connection");
-		for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
-			if (deviceStore->Devices[i].Udid == NULL) {
-				LOG_INFO("Found spot for device");
-				deviceNum = i;
-				wcscpy(deviceStore->Devices[i].Udid, udid);
-				break;
-			}
-		}
-	}
-	if (deviceNum == -1) {
-		LOG_ERROR("Too many devices attached to this driver!");
-		return STATUS_UNSUCCESSFUL;
-	}
-
 	//create WDF device
 	WDF_OBJECT_ATTRIBUTES deviceAttributes;
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&deviceAttributes, DEVICE_CONTEXT);
@@ -95,7 +69,6 @@ NTSTATUS KeystoneCreateDevice(
 	RtlZeroMemory(dev, sizeof(IU_DEVICE));
 	dev->Self = device;
 	dev->Driver = Driver;
-	dev->DeviceNum = (UCHAR)deviceNum;
 	wcscpy(dev->Udid, udid);
 
 	// init queue (has side effect of setting correct stack size for child pdo forwarding ?)
@@ -140,9 +113,9 @@ NTSTATUS KeystoneEvtDevicePrepareHardware(
 	dev->WDM.NextStackDevice = WdfDeviceWdmGetAttachedDevice(Device);
 	status = USBD_CreateHandle(
 		dev->WDM.Self,
-		dev->WDM.NextStackDevice, 
-		USBD_CLIENT_CONTRACT_VERSION_602, 
-		'usbd', 
+		dev->WDM.NextStackDevice,
+		USBD_CLIENT_CONTRACT_VERSION_602,
+		'usbd',
 		&dev->WDM.Handle
 	);
 	if (!NT_SUCCESS(status)) {
@@ -181,8 +154,34 @@ NTSTATUS KeystoneEvtDeviceD0Entry(
 	NTSTATUS status = STATUS_SUCCESS;
 	UNREFERENCED_PARAMETER(PreviousState);
 	PIU_DEVICE dev = DeviceGetContext(Device);
+	LOG_INFO("%ws Entering D0", dev->Udid);
+
+	//find and initialize device in device store
 	PIU_DEVICE_STORE deviceStore = DriverGetContext(dev->Driver);
-	LOG_INFO("%ws Entering D0", deviceStore->Devices[dev->DeviceNum].Udid);
+	LONG deviceNum = -1;
+	for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
+		if (wcscmp(deviceStore->Devices[i].Udid, dev->Udid) == 0) {
+			LOG_INFO("Device was reconnected");
+			deviceNum = i;
+			break;
+		}
+	}
+	if (deviceNum == -1) {
+		LOG_INFO("Device is new connection");
+		for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
+			if (InterlockedAdd(&deviceStore->Devices[i].DeviceState, 0) == IU_DEVICE_DISCONNECTED) {
+				LOG_INFO("Found spot for device");
+				deviceNum = i;
+				wcscpy(deviceStore->Devices[i].Udid, dev->Udid);
+				break;
+			}
+		}
+	}
+	if (deviceNum == -1) {
+		LOG_ERROR("Too many devices attached to this driver!");
+		return STATUS_UNSUCCESSFUL;
+	}
+	dev->DeviceNum = (UCHAR)deviceNum;
 
 	//get the device descriptor
 	WdfUsbTargetDeviceGetDeviceDescriptor(
@@ -190,19 +189,34 @@ NTSTATUS KeystoneEvtDeviceD0Entry(
 		&dev->DeviceDescriptor
 	);
 
-	UCHAR deviceNum = dev->DeviceNum;
+	//set the device into the best possible apple mode
 	IU_DEVICE_STATE prevState = InterlockedAdd(&deviceStore->Devices[deviceNum].DeviceState, 0);
 	if (prevState == IU_DEVICE_DISCONNECTED) {
 		LOG_INFO("First enabling super network mode (4)");
-		SetAppleMode(dev, 4);
+		status = SetAppleMode(dev, 4);
+		if (NT_SUCCESS(status)) {
+			InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA);
+			return STATUS_SUCCESS;
+		} 
+		LOG_INFO("Couldn't set super network mode, enabling regular network mode");
+		status = SetAppleMode(dev, 3);
+		if (NT_SUCCESS(status)) {
+			InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA);
+			return STATUS_SUCCESS;
+		} 
+		LOG_INFO("Couldn't set regular network mode, confinuing in initial mode");
 		InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA);
-		return STATUS_SUCCESS;
 	}
+	// refresh prev state in case above continues in regular mode, try to get valeria still
+	prevState = InterlockedAdd(&deviceStore->Devices[deviceNum].DeviceState, 0);
 	if (prevState == IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA) {
 		LOG_INFO("Adding valeria functionality");
-		SetAppleMode(dev, 2);
-		InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT);
-		return STATUS_SUCCESS;
+		status = SetAppleMode(dev, 2);
+		if (NT_SUCCESS(status)) {
+			InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT);
+			return STATUS_SUCCESS;
+		}
+		LOG_INFO("Couldn't add valeria function");
 	}
 
 	// Get current apple mode
@@ -221,27 +235,7 @@ NTSTATUS KeystoneEvtDeviceD0Entry(
 	}
 
 	InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_OPERATIONAL);
-
-	//debug
-	LOG_INFO("Device has %d configurations", dev->DeviceDescriptor.bNumConfigurations);
-	for (UCHAR i = 1; i <= dev->DeviceDescriptor.bNumConfigurations; i++) {
-		ULONG configLen;
-		UCHAR buf[IU_MAX_CONFIGURATION_BUFFER_SIZE];
-		status = GetConfigDescriptorByValue(dev, buf, sizeof(buf), i, &configLen);
-		if (!NT_SUCCESS(status)) {
-			LOG_ERROR("Could not get configuration descriptor %d for debug", i);
-			continue;
-		}
-		if (((PUSB_CONFIGURATION_DESCRIPTOR)buf)->wTotalLength > IU_MAX_CONFIGURATION_BUFFER_SIZE) {
-			LOG_ERROR("Device config is too big!");
-			continue;
-		}
-		for (USHORT j = 0; j < ((PUSB_CONFIGURATION_DESCRIPTOR)buf)->wTotalLength; j++) {
-			DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", buf[j]);
-		}
-		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
-	}
-
+	InterlockedExchange(&dev->ReadyForControl, TRUE);
 
 	return status;
 }
@@ -255,8 +249,10 @@ NTSTATUS KeystoneEvtDeviceD0Exit(
 	PIU_DEVICE_STORE deviceStore = DriverGetContext(Dev->Driver);
 	LOG_INFO("%ws Exiting D0", deviceStore->Devices[Dev->DeviceNum].Udid);
 
+	InterlockedExchange(&Dev->ReadyForControl, FALSE);
+
 	IU_DEVICE_STATE curState = InterlockedAdd(&deviceStore->Devices[Dev->DeviceNum].DeviceState, 0);
-	//if was awaiting reconnect, then do not mark as disconnected
+	//if was awaiting reconnect, then do not delete from store
 	if (curState == IU_DEVICE_AWAITING_RECONNECT || curState == IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA) {
 		LOG_INFO("Device is reconnecting, not marking disc");
 		return STATUS_SUCCESS;
@@ -277,7 +273,7 @@ NTSTATUS KeystoneEvtDeviceReleaseHardware(
 
 	PIU_DEVICE dev = DeviceGetContext(Device);
 
-	if (dev->WDMIsInitialized) 
+	if (dev->WDMIsInitialized)
 		USBD_CloseHandle(dev->WDM.Handle);
 	RtlZeroMemory(&dev->WDM, sizeof(dev->WDM));
 	dev->WDMIsInitialized = FALSE;

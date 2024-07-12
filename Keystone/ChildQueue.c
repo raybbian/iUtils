@@ -85,14 +85,15 @@ VOID ForwardRequestBeyondFDO(
 		WdfRequestComplete(Request, WdfRequestGetStatus(Request));
 }
 
-VOID ForwardRequestToFDO(
-	WDFREQUEST Request
-) {
-	LOG_INFO("Forwarding to parent");
-	WDFDEVICE Device = WdfPdoGetParent(WdfIoQueueGetDevice(WdfRequestGetIoQueue(Request)));
-	WDF_REQUEST_FORWARD_OPTIONS options;
-	WDF_REQUEST_FORWARD_OPTIONS_INIT(&options);
-	NTSTATUS status = WdfRequestForwardToParentDeviceIoQueue(Request, WdfDeviceGetDefaultQueue(Device), &options);
-	if (!NT_SUCCESS(status))
-		WdfRequestComplete(Request, status);
-}
+//VOID ForwardRequestToFDO(
+//	WDFREQUEST Request
+//) {
+//	LOG_INFO("Forwarding to parent");
+//	WDFDEVICE Device = WdfPdoGetParent(WdfIoQueueGetDevice(WdfRequestGetIoQueue(Request)));
+//	WDF_REQUEST_FORWARD_OPTIONS options;
+//	WDF_REQUEST_FORWARD_OPTIONS_INIT(&options);
+//	NTSTATUS status = WdfRequestForwardToParentDeviceIoQueue(Request, WdfDeviceGetDefaultQueue(Device), &options);
+//	if (!NT_SUCCESS(status))
+//		WdfRequestComplete(Request, status);
+//}
+

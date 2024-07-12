@@ -32,7 +32,25 @@ CONFIGRET RegisterInterfaceNotifications(
 );
 
 CONFIGRET RetrieveExistingDevices(
-	OUT PVOID Buffer,
-	IN ULONG BufferLen,
-	OUT PULONG Received
+	INOUT PMESSENGER_CONTEXT MSGContext
+);
+
+VOID UnregisterDeviceFromHandleCallbackContext(
+	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext
+);
+
+VOID CALLBACK UnregisterDeviceHandleCallbackAsync(
+	INOUT PTP_CALLBACK_INSTANCE Instance,
+	INOUT PVOID Context,
+	INOUT PTP_WORK pWork
+);
+
+BOOLEAN SendDeviceIoctl(
+	IN PMESSENGER_CONTEXT MSGContext,
+	IN LONG DeviceInd,
+	IN DWORD IoctlCode,
+	INOPT PVOID InputBuffer,
+	IN ULONG InputBufferLen,
+	INOPT PVOID OutputBuffer,
+	IN ULONG OutputBufferLen
 );

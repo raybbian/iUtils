@@ -3,6 +3,7 @@
 #include "log.h"
 #include "apple.h"
 #include <usbioctl.h>
+#include "configuration.h"
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (PAGE, KeystoneQueueInitialize)
@@ -51,9 +52,49 @@ VOID KeystoneEvtIoDeviceControl(
 	UNREFERENCED_PARAMETER(InputBufferLength);
 	UNREFERENCED_PARAMETER(OutputBufferLength);
 	LOG_INFO("Control request for %ws", Dev->Udid);
+	
+	if (InterlockedAdd(&Dev->ReadyForControl, 0) == FALSE) {
+		LOG_ERROR("Device not yet ready for control");
+		status = STATUS_UNSUCCESSFUL;
+		goto Cleanup;
+	}
 
+	PUCHAR buf = NULL;
 	switch (IoControlCode) {
-	//case MY THING:
+	case IU_IOCTL_GET_MODE:
+		LOG_INFO("Querying apple mode");
+		status = WdfRequestRetrieveOutputBuffer(Request, sizeof(UCHAR), &buf, NULL);
+		if (!NT_SUCCESS(status)) {
+			LOG_ERROR("could not retrieve output buffer");
+			goto Cleanup;
+		}
+		buf[0] = Dev->AppleMode;
+		WdfRequestSetInformation(Request, sizeof(UCHAR));
+		break;
+	case IU_IOCTL_GET_CONFIGURATION:
+		LOG_INFO("Querying device config");
+		status = WdfRequestRetrieveOutputBuffer(Request, sizeof(UCHAR), &buf, NULL);
+		if (!NT_SUCCESS(status)) {
+			LOG_ERROR("could not retrieve output buffer");
+			goto Cleanup;
+		}
+		buf[0] = Dev->Config.Descriptor->bConfigurationValue;
+		WdfRequestSetInformation(Request, sizeof(UCHAR));
+		break;
+	case IU_IOCTL_SET_CONFIGURATION:
+		LOG_INFO("Set configuration");
+		status = WdfRequestRetrieveInputBuffer(Request, sizeof(UCHAR), &buf, NULL);
+		if (!NT_SUCCESS(status)) {
+			LOG_ERROR("could not retrieve input buffer");
+			goto Cleanup;
+		}
+		//setConfiguration handles if value is not proper
+		status = SetConfigurationByValue(Dev, buf[0]);
+		if (!NT_SUCCESS(status)) {
+			LOG_ERROR("Could not set configuration");
+			goto Cleanup;
+		}
+		break;
 	default:
 		status = STATUS_INVALID_DEVICE_REQUEST;	
 		goto Cleanup;

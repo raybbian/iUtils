@@ -12,10 +12,10 @@ typedef struct _IU_DEVICE {
 	WDFDEVICE Self;
 	WCHAR Udid[IU_MAX_UDID_LENGTH];
 	WDFDRIVER Driver;
-	UCHAR DeviceNum;
-
 	WDFUSBDEVICE Handle; //this even gonna be used? can't set alternate configurations with it...
 	USB_DEVICE_DESCRIPTOR DeviceDescriptor;
+	UCHAR DeviceNum;
+	BOOLEAN WDMIsInitialized;
 
 	APPLE_CONNECTION_MODE AppleMode;
 
@@ -37,6 +37,7 @@ typedef struct _IU_DEVICE {
 			UCHAR InterfaceNumber;
 			UCHAR AlternateSetting;
 			UCHAR Class;
+			UCHAR SubClass;
 			UCHAR Protocol;
 			UCHAR _Reserved; //unused, here to match USBD_INTERFACE_INFORMATION
 			USBD_INTERFACE_HANDLE InterfaceHandle;
@@ -45,8 +46,7 @@ typedef struct _IU_DEVICE {
 		} Interfaces[IU_MAX_INTERFACE_NUMBER + 1];
 	} Config;
 
-	// flags for closing things
-	BOOLEAN WDMIsInitialized;
+	volatile LONG ReadyForControl;
 } IU_DEVICE, * PIU_DEVICE, DEVICE_CONTEXT, * PDEVICE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, DeviceGetContext);
@@ -63,5 +63,3 @@ EVT_WDF_DEVICE_RELEASE_HARDWARE KeystoneEvtDeviceReleaseHardware;
 EVT_WDF_DEVICE_D0_ENTRY KeystoneEvtDeviceD0Entry;
 EVT_WDF_DEVICE_D0_EXIT KeystoneEvtDeviceD0Exit;
 
-
-EXTERN_C_END

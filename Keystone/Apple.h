@@ -1,5 +1,4 @@
-#ifndef APPLE_H
-#define APPLE_H
+#pragma once
 
 #define APPLE_VEND_SPECIFIC_SET_MODE 0x52
 
@@ -12,8 +11,3 @@ APPLE_CONNECTION_MODE GetAppleMode(
 	IN PIU_DEVICE Dev
 );
 
-UCHAR GetDesiredConfigurationFromAppleMode(
-	APPLE_CONNECTION_MODE Mode
-);
-
-#endif

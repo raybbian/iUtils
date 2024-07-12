@@ -15,6 +15,6 @@ VOID ForwardRequestBeyondFDO(
 	WDFREQUEST Request
 );
 
-VOID ForwardRequestToFDO(
-	WDFREQUEST Request
-);
+//VOID ForwardRequestToFDO(
+//	WDFREQUEST Request
+//);
