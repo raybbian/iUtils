@@ -23,12 +23,27 @@ NTSTATUS ActivatePTPFunction(
 	WDFCHILDLIST ChildList
 );
 
+NTSTATUS ActivateAudioFunction(
+	PIU_DEVICE Dev,
+	WDFCHILDLIST ChildList
+);
+
 NTSTATUS ActivateUsbMuxFunction(
 	PIU_DEVICE Dev,
 	WDFCHILDLIST ChildList
 );
 
 NTSTATUS ActivateCdcNcmFunction(
+	PIU_DEVICE Dev,
+	WDFCHILDLIST ChildList
+);
+
+NTSTATUS ActivateTetherFunction(
+	PIU_DEVICE Dev,
+	WDFCHILDLIST ChildList
+);
+
+NTSTATUS ActivateValeriaFunction(
 	PIU_DEVICE Dev,
 	WDFCHILDLIST ChildList
 );

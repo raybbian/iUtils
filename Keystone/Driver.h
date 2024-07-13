@@ -5,6 +5,7 @@
 #include <usb.h>
 #include <usbdlib.h>
 #include <wdfusb.h>
+#include <wdfdevice.h>
 #include <initguid.h>
 #include "public.h"
 

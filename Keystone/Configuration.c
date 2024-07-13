@@ -182,7 +182,6 @@ NTSTATUS SetConfigurationByValue(
 	PURB urbp = NULL;
 	PUSBD_INTERFACE_LIST_ENTRY interfaces = NULL;
 
-	InterlockedExchange(&Dev->ReadyForControl, FALSE);
 	PurgeAllChildQueuesSynchronously(Dev);
 	MarkAllChildrenAsMissing(Dev);
 
@@ -289,7 +288,6 @@ NTSTATUS SetConfigurationByValue(
 	ActivateChildren(Dev); //activate children on this new config
 	goto Cleanup;
 Cleanup:
-	InterlockedExchange(&Dev->ReadyForControl, TRUE);
 	if (urbp) 
 		USBD_UrbFree(Dev->WDM.Handle, urbp);
 	if (interfaces)

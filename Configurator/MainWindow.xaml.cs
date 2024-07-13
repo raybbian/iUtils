@@ -22,6 +22,8 @@ using Windows.Media.Streaming.Adaptive;
 using Microsoft.UI.Input;
 using Windows.Media.Capture;
 using Windows.Graphics;
+using Windows.UI.Core;
+using Microsoft.UI.Dispatching;
 
 namespace Configurator
 {
@@ -30,6 +32,7 @@ namespace Configurator
         public MainWindow(Messenger messenger)
         {
             this.InitializeComponent();
+            m_devices = new Dictionary<int, TabViewItem>();
 
             m_hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             WindowId window_id = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(m_hWnd);
@@ -51,14 +54,31 @@ namespace Configurator
             m_oldWndProc = SetWndProc(WndProc);
 
             m_messenger = messenger;
+            m_messenger.SetAddDeviceCallback(AddDevice);
+            m_messenger.SetRemoveDeviceCallback(RemoveDevice);
+
             int devices = m_messenger.GetDevices();
             for (int i = 0; i < Messenger.IU_MAX_NUMBER_OF_DEVICES; i++)
             {
                 if ((devices & (1 << i)) != 0)
                 {
-                    AppTabView.TabItems.Add(CreateNewDeviceTab(i));
+                    AddDevice(i);
                 }
             }
+        }
+        private void AddDevice(int device)
+        {
+            Debug.WriteLine("[IUGUI] Adding device!");
+            CreateNewDeviceTab(device);
+            AppTabView.TabItems.Add(m_devices[device]);
+            AppTabView.SelectedItem = m_devices[device];
+        }
+
+        private void RemoveDevice(int device)
+        {
+            Debug.WriteLine("[IUGUI] Removing device!");
+            AppTabView.TabItems.Remove(m_devices[device]);
+            m_devices.Remove(device);
         }
 
         private void Canvas_Loaded(object sender, RoutedEventArgs e)
@@ -73,19 +93,18 @@ namespace Configurator
             m_appWindow.MoveAndResize(new Windows.Graphics.RectInt32(xCoord, yCoord, width, height));
         }
 
-        private TabViewItem CreateNewDeviceTab(int index)
+        private void CreateNewDeviceTab(int index)
         {
             TabViewItem newItem = new TabViewItem();
             newItem.Header = "Apple Device " + index;
-
             Device device = new Device(index, m_messenger);
-
             newItem.Content = device;
-            return newItem;
+
+            m_devices.Add(index, newItem);
         }
 
-
         private nint m_hWnd;
+        private Dictionary<int, TabViewItem> m_devices;
         private AppWindow m_appWindow;
         private OverlappedPresenter m_presenter;
         private Messenger m_messenger;

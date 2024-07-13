@@ -53,12 +53,6 @@ VOID KeystoneEvtIoDeviceControl(
 	UNREFERENCED_PARAMETER(OutputBufferLength);
 	LOG_INFO("Control request for %ws", Dev->Udid);
 	
-	if (InterlockedAdd(&Dev->ReadyForControl, 0) == FALSE) {
-		LOG_ERROR("Device not yet ready for control");
-		status = STATUS_UNSUCCESSFUL;
-		goto Cleanup;
-	}
-
 	PUCHAR buf = NULL;
 	switch (IoControlCode) {
 	case IU_IOCTL_GET_MODE:

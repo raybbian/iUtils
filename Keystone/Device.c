@@ -79,17 +79,6 @@ NTSTATUS KeystoneCreateDevice(
 		return status;
 	}
 
-	//create interface for talking with user app
-	status = WdfDeviceCreateDeviceInterface(
-		device,
-		&GUID_DEVINTERFACE_Keystone,
-		NULL //reference string?
-	);
-	if (!NT_SUCCESS(status)) {
-		LOG_ERROR("Create device interface failed");
-		return status;
-	}
-
 	//TODO: WMI registration?
 
 	return status;
@@ -235,7 +224,39 @@ NTSTATUS KeystoneEvtDeviceD0Entry(
 	}
 
 	InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_OPERATIONAL);
-	InterlockedExchange(&dev->ReadyForControl, TRUE);
+
+	//create interface for talking with user app
+	status = WdfDeviceCreateDeviceInterface(
+		Device,
+		&GUID_DEVINTERFACE_Keystone,
+		NULL //reference string?
+	);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Create device interface failed");
+		return status;
+	}
+	WdfDeviceSetDeviceInterfaceState(Device, &GUID_DEVINTERFACE_Keystone, NULL, TRUE);
+
+	////print configurations for debug
+	//LOG_INFO("Device has %d configurations", dev->DeviceDescriptor.bNumConfigurations);
+	//for (UCHAR i = 1; i <= dev->DeviceDescriptor.bNumConfigurations; i++) {
+	//	ULONG configLen;
+	//	UCHAR buf[IU_MAX_CONFIGURATION_BUFFER_SIZE];
+	//	status = GetConfigDescriptorByValue(dev, buf, sizeof(buf), i, &configLen);
+	//	if (!NT_SUCCESS(status)) {
+	//		LOG_ERROR("Could not get configuration descriptor %d for debug", i);
+	//		continue;
+	//	}
+	//	if (((PUSB_CONFIGURATION_DESCRIPTOR)buf)->wTotalLength > IU_MAX_CONFIGURATION_BUFFER_SIZE) {
+	//		LOG_ERROR("Device config is too big!");
+	//		continue;
+	//	}
+	//	for (USHORT j = 0; j < ((PUSB_CONFIGURATION_DESCRIPTOR)buf)->wTotalLength; j++) {
+	//		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", buf[j]);
+	//	}
+	//	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
+	//}
+
 
 	return status;
 }
@@ -249,7 +270,7 @@ NTSTATUS KeystoneEvtDeviceD0Exit(
 	PIU_DEVICE_STORE deviceStore = DriverGetContext(Dev->Driver);
 	LOG_INFO("%ws Exiting D0", deviceStore->Devices[Dev->DeviceNum].Udid);
 
-	InterlockedExchange(&Dev->ReadyForControl, FALSE);
+	WdfDeviceSetDeviceInterfaceState(Device, &GUID_DEVINTERFACE_Keystone, NULL, FALSE);
 
 	IU_DEVICE_STATE curState = InterlockedAdd(&deviceStore->Devices[Dev->DeviceNum].DeviceState, 0);
 	//if was awaiting reconnect, then do not delete from store

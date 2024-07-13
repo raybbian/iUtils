@@ -15,13 +15,13 @@ NTSTATUS ActivatePTPFunction(
 		Dev->Config.Descriptor,
 		Dev->Config.Descriptor,
 		-1,
-		-1,
+		0,
 		USB_DEVICE_CLASS_IMAGE,
 		USB_DEVICE_SUBCLASS_STILL_IMAGE_CAPTURE,
 		USB_DEVICE_PROTOCOL_PTP
 	);
 	if (!ptpDesc) {
-		LOG_INFO("Failed to get interface for apple PTP");
+		LOG_ERROR("Failed to get interface for apple PTP");
 		return STATUS_NOT_SUPPORTED;
 	}
 
@@ -65,6 +65,48 @@ NTSTATUS ActivatePTPFunction(
 	return status;
 }
 
+NTSTATUS ActivateAudioFunction(
+	PIU_DEVICE Dev,
+	WDFCHILDLIST ChildList
+) {
+	NTSTATUS status = STATUS_SUCCESS;
+
+	IU_CHILD_IDENTIFIER audioId;
+	RtlZeroMemory(&audioId, sizeof(audioId)); //ids are compared byte by byte (no callback is supplied to compare), so need to make sure zero for consistency
+	WDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER_INIT(
+		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&audioId,
+		sizeof(IU_CHILD_IDENTIFIER)
+	);
+	audioId.FunctionType = APPLE_FUNCTION_AUDIO;
+	audioId.CurrentParentMode = Dev->AppleMode;
+	audioId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
+	audioId.NumberOfInterfaces = 3;
+	audioId.NumberOfCompatibleIds = 0; //unsure if driver exists for windows
+	audioId.InterfacesUsed[0] = 0;
+	audioId.InterfacesUsed[1] = 1;
+	audioId.InterfacesUsed[2] = 2;
+	RtlInitUnicodeString(&audioId.HardwareId, L"USB\\VID_05AC&PID_12AB&MI_97");
+	RtlInitUnicodeString(&audioId.FunctionalDescription, L"Apple Audio Streaming");
+
+	
+	status = WdfChildListAddOrUpdateChildDescriptionAsPresent(
+		ChildList,
+		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&audioId,
+		NULL
+	);
+	if (status == STATUS_OBJECT_NAME_EXISTS) {
+		LOG_INFO("Updating audio instead");
+		status = STATUS_SUCCESS;
+	}
+	else if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Could not add audio");
+	}
+	else {
+		LOG_INFO("Activated audio");
+	}
+	return status;
+}
+
 NTSTATUS ActivateUsbMuxFunction(
 	PIU_DEVICE Dev,
 	WDFCHILDLIST ChildList
@@ -75,13 +117,17 @@ NTSTATUS ActivateUsbMuxFunction(
 		Dev->Config.Descriptor,
 		Dev->Config.Descriptor,
 		-1,
-		-1,
+		0,
 		USB_DEVICE_CLASS_VENDOR_SPECIFIC,
 		APPLE_USBMUX_SUBCLASS,
 		APPLE_USBMUX_PROTOCOL
 	);
 	if (!usbmuxDesc) {
-		LOG_INFO("Failed to get interface for apple usbmux");
+		LOG_ERROR("Failed to get interface for apple usbmux");
+		return STATUS_NOT_SUPPORTED;
+	}
+	if (usbmuxDesc->bNumEndpoints != 2) {
+		LOG_ERROR("Found usbmux descriptor with wrong number of endpoints");
 		return STATUS_NOT_SUPPORTED;
 	}
 
@@ -137,13 +183,17 @@ NTSTATUS ActivateCdcNcmFunction(
 		Dev->Config.Descriptor,
 		Dev->Config.Descriptor,
 		-1,
-		-1,
+		0,
 		USB_DEVICE_CLASS_COMMUNICATIONS,
 		USB_DEVICE_SUBCLASS_CDC_NCM,
 		-1
 	);
 	if (!cdcControlDesc) {
-		LOG_INFO("Failed to get interface for cdc control desc");
+		LOG_ERROR("Failed to get interface for cdc control desc");
+		return STATUS_NOT_SUPPORTED;
+	}
+	if (cdcControlDesc->bNumEndpoints == 0) {
+		LOG_ERROR("Found CDC NCM desc with no control endpoint");
 		return STATUS_NOT_SUPPORTED;
 	}
 
@@ -212,6 +262,124 @@ NTSTATUS ActivateCdcNcmFunction(
 	}
 	else {
 		LOG_INFO("Activated cdc ncm");
+	}
+	return status;
+}
+
+NTSTATUS ActivateTetherFunction(
+	PIU_DEVICE Dev,
+	WDFCHILDLIST ChildList
+) {
+	NTSTATUS status = STATUS_SUCCESS;
+
+	PUSB_INTERFACE_DESCRIPTOR tetherDesc = USBD_ParseConfigurationDescriptorEx(
+		Dev->Config.Descriptor,
+		Dev->Config.Descriptor,
+		-1,
+		0,
+		USB_DEVICE_CLASS_VENDOR_SPECIFIC,
+		APPLE_TETHER_SUBCLASS,
+		APPLE_TETHER_PROTOCOL
+	);
+	if (!tetherDesc) {
+		LOG_INFO("Failed to get interface for tether desc");
+		return STATUS_NOT_SUPPORTED;
+	}
+
+	IU_CHILD_IDENTIFIER tetherId;
+	RtlZeroMemory(&tetherId, sizeof(tetherId));
+	WDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER_INIT(
+		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&tetherId,
+		sizeof(IU_CHILD_IDENTIFIER)
+	);
+	tetherId.FunctionType = APPLE_FUNCTION_TETHER;
+	tetherId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
+	tetherId.CurrentParentMode = Dev->AppleMode;
+	tetherId.NumberOfInterfaces = 1;
+	tetherId.NumberOfCompatibleIds = 6;
+	tetherId.InterfacesUsed[0] = tetherDesc->bInterfaceNumber;
+	RtlInitUnicodeString(&tetherId.HardwareId, L"USB\\VID_05AC&PID_12AB&MI_02");
+	RtlInitUnicodeString(&tetherId.CompatibleIds[0], L"USB\\COMPAT_VID_05ac&Class_FF&SubClass_FD&Prot_01");
+	RtlInitUnicodeString(&tetherId.CompatibleIds[1], L"USB\\COMPAT_VID_05ac&Class_FF&SubClass_FD");
+	RtlInitUnicodeString(&tetherId.CompatibleIds[2], L"USB\\COMPAT_VID_05ac&Class_FF");
+	RtlInitUnicodeString(&tetherId.CompatibleIds[3], L"USB\\Class_FF&SubClass_FD&Prot_01");
+	RtlInitUnicodeString(&tetherId.CompatibleIds[4], L"USB\\Class_FF&SubClass_FD");
+	RtlInitUnicodeString(&tetherId.CompatibleIds[5], L"USB\\Class_FF");
+	RtlInitUnicodeString(&tetherId.FunctionalDescription, L"Apple Mobile Tethering");
+
+	status = WdfChildListAddOrUpdateChildDescriptionAsPresent(
+		ChildList,
+		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&tetherId,
+		NULL
+	);
+	if (status == STATUS_OBJECT_NAME_EXISTS) {
+		LOG_INFO("Updating tether instead");
+		status = STATUS_SUCCESS;
+	}
+	else if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Could not add tether");
+	}
+	else {
+		LOG_INFO("Activated tether");
+	}
+	return status;
+}
+
+NTSTATUS ActivateValeriaFunction(
+	PIU_DEVICE Dev,
+	WDFCHILDLIST ChildList
+) {
+	NTSTATUS status = STATUS_SUCCESS;
+
+	PUSB_INTERFACE_DESCRIPTOR valeriaDesc = USBD_ParseConfigurationDescriptorEx(
+		Dev->Config.Descriptor,
+		Dev->Config.Descriptor,
+		-1,
+		0,
+		USB_DEVICE_CLASS_VENDOR_SPECIFIC,
+		APPLE_VALERIA_SUBCLASS,
+		APPLE_VALERIA_PROTOCOL
+	);
+	if (!valeriaDesc) {
+		LOG_INFO("Failed to get interface for valeria desc");
+		return STATUS_NOT_SUPPORTED;
+	}
+
+	IU_CHILD_IDENTIFIER valeriaId;
+	RtlZeroMemory(&valeriaId, sizeof(valeriaId));
+	WDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER_INIT(
+		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&valeriaId,
+		sizeof(IU_CHILD_IDENTIFIER)
+	);
+	valeriaId.FunctionType = APPLE_FUNCTION_VALERIA;
+	valeriaId.CurrentParentConfig = Dev->Config.Descriptor->bConfigurationValue;
+	valeriaId.CurrentParentMode = Dev->AppleMode;
+	valeriaId.NumberOfInterfaces = 1;
+	valeriaId.NumberOfCompatibleIds = 6;
+	valeriaId.InterfacesUsed[0] = valeriaDesc->bInterfaceNumber;
+	RtlInitUnicodeString(&valeriaId.HardwareId, L"USB\\VID_05AC&PID_12AB&MI_98");
+	RtlInitUnicodeString(&valeriaId.CompatibleIds[0], L"USB\\COMPAT_VID_05ac&Class_FF&SubClass_2A&Prot_FF");
+	RtlInitUnicodeString(&valeriaId.CompatibleIds[0], L"USB\\COMPAT_VID_05ac&Class_FF&SubClass_2A");
+	RtlInitUnicodeString(&valeriaId.CompatibleIds[0], L"USB\\COMPAT_VID_05ac&Class_FF");
+	RtlInitUnicodeString(&valeriaId.CompatibleIds[0], L"USB\\Class_FF&SubClass_2A&Prot_FF");
+	RtlInitUnicodeString(&valeriaId.CompatibleIds[0], L"USB\\Class_FF&SubClass_2A");
+	RtlInitUnicodeString(&valeriaId.CompatibleIds[0], L"USB\\Class_FF");
+	RtlInitUnicodeString(&valeriaId.FunctionalDescription, L"Apple Valeria Screenshare");
+
+	status = WdfChildListAddOrUpdateChildDescriptionAsPresent(
+		ChildList,
+		(PWDF_CHILD_IDENTIFICATION_DESCRIPTION_HEADER)&valeriaId,
+		NULL
+	);
+	if (status == STATUS_OBJECT_NAME_EXISTS) {
+		LOG_INFO("Updating valeria instead");
+		status = STATUS_SUCCESS;
+	}
+	else if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Could not add valeria");
+	}
+	else {
+		LOG_INFO("Activated valeria");
 	}
 	return status;
 }

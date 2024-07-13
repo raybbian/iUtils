@@ -9,6 +9,16 @@ typedef enum _MSG_STATUS {
 
 EXPORT PMESSENGER_CONTEXT WINAPI MSGInit();
 
+EXPORT VOID WINAPI MSGSetAddDeviceCallback(
+	IN PMESSENGER_CONTEXT MSGContext,
+	IN VOID(*DeviceAddCallback) (LONG)
+);
+
+EXPORT VOID WINAPI MSGSetRemoveDeviceCallback(
+	IN PMESSENGER_CONTEXT MSGContext,
+	IN VOID(*DeviceRemoveCallback) (LONG)
+);
+
 EXPORT LONG WINAPI MSGGetDevices(
 	IN PMESSENGER_CONTEXT MSGContext
 );

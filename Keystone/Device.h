@@ -44,7 +44,6 @@ typedef struct _IU_DEVICE {
 		} Interfaces[IU_MAX_INTERFACE_NUMBER + 1]; //by number
 	} Config;
 
-	volatile LONG ReadyForControl;
 	BOOLEAN WDMIsInitialized;
 } IU_DEVICE, * PIU_DEVICE, DEVICE_CONTEXT, * PDEVICE_CONTEXT;
 

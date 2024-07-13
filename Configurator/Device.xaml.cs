@@ -26,7 +26,8 @@ namespace Configurator
             m_deviceInd = deviceIndex;
             m_messenger = parentMessenger;
             m_deviceMode = parentMessenger.GetAppleMode(m_deviceInd);
-            SetConfiguration(parentMessenger.GetConfiguration(m_deviceInd));
+            m_deviceConfig = parentMessenger.GetConfiguration(m_deviceInd);
+            UpdateAvailableFeatures();
 
             //set initial config button as highlighted
             (ConfigPanel.Children[m_deviceConfig - 1] as ToggleButton).IsChecked = true;

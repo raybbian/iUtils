@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.UI.Dispatching;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -10,16 +11,41 @@ using System.Threading.Tasks;
 
 namespace Configurator
 {
-    public class Messenger: IDisposable
+    public class Messenger : IDisposable
     {
 
-        public Messenger()
+        public Messenger(DispatcherQueue dispatch)
         {
+            m_dispatch = dispatch;
             m_context = MSGInit();
             if (m_context == IntPtr.Zero)
             {
                 Debug.WriteLine("[IUGUI] Falied to initialize messenger");
             }
+        }
+
+        public void SetAddDeviceCallback(DeviceCallbackDelegate addDeviceCallback)
+        {
+            MSGSetAddDeviceCallback(m_context, (int device) =>
+            {
+                m_dispatch.TryEnqueue(() =>
+                {
+                    addDeviceCallback(device);
+                });
+            });
+            m_addDeviceCallback = addDeviceCallback;
+        }
+
+        public void SetRemoveDeviceCallback(DeviceCallbackDelegate removeDeviceCallback)
+        {
+            MSGSetRemoveDeviceCallback(m_context, (int device) =>
+            {
+                m_dispatch.TryEnqueue(() =>
+                {
+                    removeDeviceCallback(device);
+                });
+            });
+            m_removeDeviceCallback = removeDeviceCallback;
         }
 
         public int GetDevices()
@@ -81,7 +107,10 @@ namespace Configurator
             }
         }
 
-        private IntPtr m_context;
+        private IntPtr m_context = IntPtr.Zero;
+        private DispatcherQueue m_dispatch;
+        private DeviceCallbackDelegate m_addDeviceCallback;
+        private DeviceCallbackDelegate m_removeDeviceCallback;
 
         // ================== CLEANUP CODE =========================
 
@@ -98,8 +127,9 @@ namespace Configurator
             m_disposed = true;
         }
 
-        public void Dispose() { 
-            Dispose(true); 
+        public void Dispose()
+        {
+            Dispose(true);
 
             GC.SuppressFinalize(this);
         }
@@ -189,22 +219,31 @@ namespace Configurator
         // ================= DLL FUNCTIONS =================
         private const string DLL_NAME = "Messenger.dll"; // Replace with your DLL name
 
-        [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
-        public static extern IntPtr MSGInit();
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void DeviceCallbackDelegate(int device);
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
-        public static extern int MSGGetDevices(IntPtr MSGContext);
+        private static extern IntPtr MSGInit();
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
-        public static extern int MSGGetAppleMode(IntPtr MSGContext, int DeviceInd);
+        private static extern IntPtr MSGSetAddDeviceCallback(IntPtr MSGContext, DeviceCallbackDelegate callback);
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
-        public static extern int MSGGetConfiguration(IntPtr MSGContext, int DeviceInd);
+        private static extern IntPtr MSGSetRemoveDeviceCallback(IntPtr MSGContext, DeviceCallbackDelegate callback);
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
-        public static extern int MSGSetConfiguration(IntPtr MSGContext, int DeviceInd, int Configuration);
+        private static extern int MSGGetDevices(IntPtr MSGContext);
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
-        public static extern void MSGClose(IntPtr MSGContext);
+        private static extern int MSGGetAppleMode(IntPtr MSGContext, int DeviceInd);
+
+        [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
+        private static extern int MSGGetConfiguration(IntPtr MSGContext, int DeviceInd);
+
+        [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
+        private static extern int MSGSetConfiguration(IntPtr MSGContext, int DeviceInd, int Configuration);
+
+        [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]
+        private static extern void MSGClose(IntPtr MSGContext);
     }
 }

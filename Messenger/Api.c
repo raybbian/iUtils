@@ -33,8 +33,23 @@ Error:
 		HeapFree(GetProcessHeap(), 0, MSGContext);
 		MSGContext = NULL;
 	}
-Cleanup:
+	MSG_DEBUG(L"[IUMSG] Error initializing msg context")
+		Cleanup:
 	return MSGContext;
+}
+
+VOID WINAPI MSGSetAddDeviceCallback(
+	IN PMESSENGER_CONTEXT MSGContext,
+	IN VOID(*DeviceAddCallback) (LONG)
+) {
+	MSGContext->DeviceAddCallback = DeviceAddCallback;
+}
+
+VOID WINAPI MSGSetRemoveDeviceCallback(
+	IN PMESSENGER_CONTEXT MSGContext,
+	IN VOID(*DeviceRemoveCallback) (LONG)
+) {
+	MSGContext->DeviceRemoveCallback = DeviceRemoveCallback;
 }
 
 LONG WINAPI MSGGetDevices(
@@ -97,7 +112,7 @@ VOID WINAPI MSGClose(IN PMESSENGER_CONTEXT MSGContext) {
 	}
 
 	for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
-		RemoveDevice(&MSGContext->Devices[i]);
+		RemoveDevice(&MSGContext->Devices[i], FALSE);
 	}
 	//cleanup other context attributes
 	CONFIGRET ret = CM_Unregister_Notification(MSGContext->InterfaceNotification);

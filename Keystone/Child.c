@@ -79,7 +79,6 @@ NTSTATUS KeystoneEvtChildListCreateDevice(
 		return status;
 	}
 
-
 	//TODO: device description
 	//TODO: device text, locale
 
@@ -287,15 +286,15 @@ VOID ActivateChildren(
 	if (capabilitiesArray[0])
 		ActivatePTPFunction(Dev, ChildList);
 	if (capabilitiesArray[1])
-		; //activate audio streaming
+		ActivateAudioFunction(Dev, ChildList);
 	if (capabilitiesArray[2])
 		ActivateUsbMuxFunction(Dev, ChildList);
 	if (capabilitiesArray[3])
 		ActivateCdcNcmFunction(Dev, ChildList);
 	if (capabilitiesArray[4])
-		; //activate mobile tethering
+		ActivateTetherFunction(Dev, ChildList);
 	if (capabilitiesArray[5])
-		; //activate valeria
+		ActivateValeriaFunction(Dev, ChildList);
 
 	WdfChildListEndScan(ChildList);
 
