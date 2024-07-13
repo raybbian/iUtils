@@ -27,10 +27,19 @@ namespace Configurator
 
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
-            m_window = new MainWindow();
+            m_messenger = new Messenger();
+            m_window = new MainWindow(m_messenger);
             m_window.Activate();
+
+            m_window.AppWindow.Destroying += AppWindow_Destroying;
         }
 
+        private void AppWindow_Destroying(Microsoft.UI.Windowing.AppWindow sender, object args)
+        {
+            m_messenger.Dispose();
+        }
+
+        private Messenger m_messenger;
         private Window m_window;
     }
 }

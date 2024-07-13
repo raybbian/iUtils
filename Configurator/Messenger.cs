@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Configurator
 {
-    public class Messenger
+    public class Messenger: IDisposable
     {
 
         public Messenger()
@@ -17,7 +18,7 @@ namespace Configurator
             m_context = MSGInit();
             if (m_context == IntPtr.Zero)
             {
-                Debug.WriteLine("Falied to initialize messenger");
+                Debug.WriteLine("[IUGUI] Falied to initialize messenger");
             }
         }
 
@@ -25,13 +26,13 @@ namespace Configurator
         {
             if (m_context == IntPtr.Zero)
             {
-                Debug.WriteLine("Messenger is not initialized!");
+                Debug.WriteLine("[IUGUI] Messenger is not initialized!");
                 return -1;
             }
             int ret = MSGGetDevices(m_context);
             if (ret < 0)
             {
-                Debug.WriteLine("Failed to get devices");
+                Debug.WriteLine("[IUGUI] Failed to get devices");
             }
             return ret;
         }
@@ -40,13 +41,13 @@ namespace Configurator
         {
             if (m_context == IntPtr.Zero)
             {
-                Debug.WriteLine("Messenger is not initialized!");
+                Debug.WriteLine("[IUGUI] Messenger is not initialized!");
                 return -1;
             }
             int ret = MSGGetAppleMode(m_context, device);
             if (ret < 0)
             {
-                Debug.WriteLine("Failed to get device mode");
+                Debug.WriteLine("[IUGUI] Failed to get device mode");
             }
             return ret;
         }
@@ -55,13 +56,13 @@ namespace Configurator
         {
             if (m_context == IntPtr.Zero)
             {
-                Debug.WriteLine("Messenger is not initialized!");
+                Debug.WriteLine("[IUGUI] Messenger is not initialized!");
                 return -1;
             }
             int ret = MSGGetConfiguration(m_context, device);
             if (ret < 0)
             {
-                Debug.WriteLine("Failed to get device configuration");
+                Debug.WriteLine("[IUGUI] Failed to get device configuration");
             }
             return ret;
         }
@@ -70,27 +71,47 @@ namespace Configurator
         {
             if (m_context == IntPtr.Zero)
             {
-                Debug.WriteLine("Messenger is not initialized!");
+                Debug.WriteLine("[IUGUI] Messenger is not initialized!");
                 return;
             }
             int ret = MSGSetConfiguration(m_context, device, configuration);
             if (ret < 0)
             {
-                Debug.WriteLine("Failed to set configuration");
-            }
-        }
-
-        ~Messenger()
-        {
-            if (m_context != IntPtr.Zero)
-            {
-                MSGClose(m_context);
-                Debug.WriteLine("Closed messenger");
+                Debug.WriteLine("[IUGUI] Failed to set configuration");
             }
         }
 
         private IntPtr m_context;
 
+        // ================== CLEANUP CODE =========================
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (m_disposed) return;
+            Debug.WriteLine("[IUGUI] Trying to dispose");
+            if (m_context != IntPtr.Zero)
+            {
+                MSGClose(m_context);
+                m_context = IntPtr.Zero;
+                Debug.WriteLine("[IUGUI] Closed messenger");
+            }
+            m_disposed = true;
+        }
+
+        public void Dispose() { 
+            Dispose(true); 
+
+            GC.SuppressFinalize(this);
+        }
+
+        ~Messenger()
+        {
+            Dispose(false);
+        }
+
+        private bool m_disposed;
+
+        // =========================== DLL_CONSTANTS ===============
         public static readonly int IU_MAX_NUMBER_OF_DEVICES = 8;
         public static readonly int[,,] APPLE_MODE_CAPABILITIES = {
             { // APPLE_MODE_UNKNOWN
@@ -165,11 +186,7 @@ namespace Configurator
             },
         };
 
-
-
-
         // ================= DLL FUNCTIONS =================
-
         private const string DLL_NAME = "Messenger.dll"; // Replace with your DLL name
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Winapi)]

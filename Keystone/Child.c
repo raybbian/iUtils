@@ -5,6 +5,8 @@
 #include "functions.h"
 #include "stdio.h"
 
+#define MAX_INSTANCE_ID_LEN 100
+
 VOID KeystoneChildListInitialize(
 	IN PWDFDEVICE_INIT DeviceInit
 ) {
@@ -67,7 +69,17 @@ NTSTATUS KeystoneEvtChildListCreateDevice(
 		}
 	}
 
-	//TODO: device instance id
+	WCHAR instanceId[MAX_INSTANCE_ID_LEN];
+	swprintf_s(instanceId, MAX_INSTANCE_ID_LEN, L"iUtils:Mode%d:Cfg%d:Function%d", Dev->AppleMode, Dev->Config.Descriptor->bConfigurationValue, ChildId->FunctionType);
+	UNICODE_STRING str;
+	RtlInitUnicodeString(&str, instanceId);
+	status = WdfPdoInitAssignInstanceID(ChildInit, &str);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Failed to assign instance id");
+		return status;
+	}
+
+
 	//TODO: device description
 	//TODO: device text, locale
 

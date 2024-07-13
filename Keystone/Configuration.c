@@ -5,6 +5,39 @@
 #include <usbioctl.h>
 #include "child.h"
 
+NTSTATUS FillDeviceDescriptor(
+	IN PIU_DEVICE Dev
+) {
+	NTSTATUS ntStatus = STATUS_SUCCESS;
+
+	LOG_INFO("Filling device descriptor");
+
+	URB urb;
+	USB_DEVICE_DESCRIPTOR tmpDesc;
+	RtlZeroMemory(&urb, sizeof(struct _URB_CONTROL_DESCRIPTOR_REQUEST));
+	urb.UrbHeader.Function = URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE;
+	urb.UrbHeader.Length = sizeof(struct _URB_CONTROL_DESCRIPTOR_REQUEST);
+	urb.UrbControlDescriptorRequest.TransferBufferLength = sizeof(tmpDesc);
+	urb.UrbControlDescriptorRequest.TransferBuffer = (PVOID)&tmpDesc;
+	urb.UrbControlDescriptorRequest.DescriptorType = USB_DEVICE_DESCRIPTOR_TYPE;
+	urb.UrbControlDescriptorRequest.Index = 0;
+	urb.UrbControlDescriptorRequest.LanguageId = 0;
+
+	ntStatus = SendUrbSync(Dev, &urb);
+	if (!NT_SUCCESS(ntStatus) || !USBD_SUCCESS(urb.UrbHeader.Status)) {
+		LOG_ERROR("Getting device descriptor failed: status 0x%x, urb status: 0x%x", ntStatus, urb.UrbHeader.Status);
+		return ntStatus;
+	}
+
+	if (urb.UrbControlDescriptorRequest.TransferBufferLength < sizeof(USB_DEVICE_DESCRIPTOR)) {
+		LOG_ERROR("Invalid device descriptor of length %d", urb.UrbControlDescriptorRequest.TransferBufferLength);
+		return STATUS_BAD_DEVICE_TYPE;
+	}
+
+	RtlCopyMemory(&Dev->DeviceDescriptor, &tmpDesc, sizeof(USB_DEVICE_DESCRIPTOR));
+	return ntStatus;
+}
+
 NTSTATUS GetCurrentConfiguration(
 	IN PIU_DEVICE Dev,
 	OUT PUCHAR Configuration,
@@ -117,6 +150,7 @@ NTSTATUS GetConfigDescriptorByValue(
 static NTSTATUS UnsetConfiguration(
 	INOUT PIU_DEVICE Dev
 ) {
+	LOG_INFO("Resetting configuration");
 	NTSTATUS status = STATUS_SUCCESS;
 	URB urb;
 	RtlZeroMemory(&urb, sizeof(URB));
@@ -148,31 +182,42 @@ NTSTATUS SetConfigurationByValue(
 	PURB urbp = NULL;
 	PUSBD_INTERFACE_LIST_ENTRY interfaces = NULL;
 
+	InterlockedExchange(&Dev->ReadyForControl, FALSE);
 	PurgeAllChildQueuesSynchronously(Dev);
 	MarkAllChildrenAsMissing(Dev);
 
-	if (Value == 0) { //deconfigure
-		LOG_INFO("Resetting configuration");
+	if (Value == 0)  //deconfigure
+		return UnsetConfiguration(Dev);
+	//if the device is already initialized and in a nonzero configuration, and we want to change it, we first reset it
+	BOOLEAN needsReset = Dev->Config.Descriptor && Dev->Config.Descriptor->bConfigurationValue != 0 && Value != 0;
+	if (needsReset) {
 		status = UnsetConfiguration(Dev);
-		goto Cleanup;
+		if (!NT_SUCCESS(status)) {
+			LOG_ERROR("Could not reset device before switch");
+			goto Cleanup;
+		}
 	}
+
+	// 1. Get the configuration descriptor
 	
 	ULONG configLen;
-	status = GetConfigDescriptorByValue(Dev, Dev->Config.Buffer, sizeof(Dev->Config.Buffer), Value, &configLen);
+	UCHAR tmpBuf[IU_MAX_CONFIGURATION_BUFFER_SIZE];
+	status = GetConfigDescriptorByValue(Dev, tmpBuf, sizeof(tmpBuf), Value, &configLen);
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Could not get configuration descriptor for set config");
 		goto Cleanup;
 	}
-	if (((PUSB_CONFIGURATION_DESCRIPTOR)Dev->Config.Buffer)->wTotalLength > IU_MAX_CONFIGURATION_BUFFER_SIZE) {
+	PUSB_CONFIGURATION_DESCRIPTOR tmpDescriptor = (PUSB_CONFIGURATION_DESCRIPTOR)tmpBuf;
+	if (tmpDescriptor->wTotalLength > IU_MAX_CONFIGURATION_BUFFER_SIZE) {
 		LOG_ERROR("Device config is too big!");
 		status = STATUS_BUFFER_TOO_SMALL;
 		goto Cleanup;
 	}
-	Dev->Config.Descriptor = (PUSB_CONFIGURATION_DESCRIPTOR)Dev->Config.Buffer;
+	LOG_INFO("Config len is %d bytes", tmpDescriptor->wTotalLength);
 
-	LOG_INFO("Config len is %d bytes", Dev->Config.Descriptor->wTotalLength);
+	// 2. Build the interface list
 
-	ULONG numInterfaces = Dev->Config.Descriptor->bNumInterfaces;
+	ULONG numInterfaces = tmpDescriptor->bNumInterfaces;
 	interfaces = ExAllocatePoolZero(
 		NonPagedPoolNx,
 		sizeof(USBD_INTERFACE_LIST_ENTRY) * (numInterfaces + 1),
@@ -185,10 +230,10 @@ NTSTATUS SetConfigurationByValue(
 	}
 
 	PUSB_INTERFACE_DESCRIPTOR intfDesc;
-	PUCHAR startP = (PUCHAR)Dev->Config.Descriptor;
+	PUCHAR startP = tmpBuf;
 	for (ULONG i = 0; i < numInterfaces; i++) {
 		intfDesc = USBD_ParseConfigurationDescriptorEx(
-			Dev->Config.Descriptor,
+			tmpDescriptor,
 			startP,
 			-1,	//intfnum
 			0,	//altset
@@ -209,9 +254,11 @@ NTSTATUS SetConfigurationByValue(
 
 	interfaces[numInterfaces].InterfaceDescriptor = NULL;
 
+	// 3. Build the configuration urb
+
 	status = USBD_SelectConfigUrbAllocateAndBuild(
 		Dev->WDM.Handle, 
-		Dev->Config.Descriptor, 
+		tmpDescriptor, 
 		interfaces, 
 		&urbp
 	);
@@ -222,11 +269,15 @@ NTSTATUS SetConfigurationByValue(
 
 	status = SendUrbSync(Dev, urbp);
 	if (!NT_SUCCESS(status) || !USBD_SUCCESS(urbp->UrbHeader.Status)) {
-		LOG_ERROR("Failed to call change config");
 		if (NT_SUCCESS(status)) status = urbp->UrbHeader.Status; //possible?
+		LOG_ERROR("Failed to call change config: status %X", status);
 		goto Cleanup;
 	}
 
+	// 4. Copy the configuration into the context
+
+	RtlCopyMemory(Dev->Config.Buffer, tmpBuf, tmpDescriptor->wTotalLength);
+	Dev->Config.Descriptor = (PUSB_CONFIGURATION_DESCRIPTOR)Dev->Config.Buffer;
 	Dev->Config.Handle = urbp->UrbSelectConfiguration.ConfigurationHandle;
 	status = UpdateConfigurationFromInterfaceList(Dev, interfaces);
 	if (!NT_SUCCESS(status)) {
@@ -235,18 +286,14 @@ NTSTATUS SetConfigurationByValue(
 	}
 
 	LOG_INFO("Set configuration to %d", Value);
-
-	//for (USHORT i = 0; i < Dev->Config.Descriptor->wTotalLength; i++) {
-	//	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "%02X ", Dev->Config.Buffer[i]);
-	//}
-	//DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
-
+	ActivateChildren(Dev); //activate children on this new config
+	goto Cleanup;
 Cleanup:
-	if (interfaces)
-		ExFreePoolWithTag(interfaces, IU_ALLOC_CONFIG_POOL);
+	InterlockedExchange(&Dev->ReadyForControl, TRUE);
 	if (urbp) 
 		USBD_UrbFree(Dev->WDM.Handle, urbp);
-	ActivateChildren(Dev); //activate children on this new config
+	if (interfaces)
+		ExFreePoolWithTag(interfaces, IU_ALLOC_CONFIG_POOL);
 	return status;
 }
 

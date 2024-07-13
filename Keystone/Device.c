@@ -125,24 +125,23 @@ NTSTATUS KeystoneEvtDevicePrepareHardware(
 	dev->WDMIsInitialized = TRUE;
 
 	// Initialize WDF Handle
-	if (dev->Handle == NULL) { //could be same handle after stop (?)
-		WDF_USB_DEVICE_CREATE_CONFIG createParams;
-		WDF_USB_DEVICE_CREATE_CONFIG_INIT(
-			&createParams,
-			USBD_CLIENT_CONTRACT_VERSION_602
-		);
-		status = WdfUsbTargetDeviceCreateWithParameters(
-			Device,
-			&createParams,
-			WDF_NO_OBJECT_ATTRIBUTES,
-			&dev->Handle
-		);
-		if (!NT_SUCCESS(status)) {
-			LOG_ERROR("Failed to get WDF handle, status=%X", status);
-			return status;
-		}
-
-	}
+	//if (dev->Handle == NULL) { //could be same handle after stop (?)
+	//	WDF_USB_DEVICE_CREATE_CONFIG createParams;
+	//	WDF_USB_DEVICE_CREATE_CONFIG_INIT(
+	//		&createParams,
+	//		USBD_CLIENT_CONTRACT_VERSION_602
+	//	);
+	//	status = WdfUsbTargetDeviceCreateWithParameters(
+	//		Device,
+	//		&createParams,
+	//		WDF_NO_OBJECT_ATTRIBUTES,
+	//		&dev->Handle
+	//	);
+	//	if (!NT_SUCCESS(status)) {
+	//		LOG_ERROR("Failed to get WDF handle, status=%X", status);
+	//		return status;
+	//	}
+	//}
 
 	return status;
 }
@@ -184,10 +183,11 @@ NTSTATUS KeystoneEvtDeviceD0Entry(
 	dev->DeviceNum = (UCHAR)deviceNum;
 
 	//get the device descriptor
-	WdfUsbTargetDeviceGetDeviceDescriptor(
-		dev->Handle,
-		&dev->DeviceDescriptor
-	);
+	status = FillDeviceDescriptor(dev);
+	if (!NT_SUCCESS(status)) {
+		LOG_ERROR("Failed to get device descriptor");
+		return status;
+	}
 
 	//set the device into the best possible apple mode
 	IU_DEVICE_STATE prevState = InterlockedAdd(&deviceStore->Devices[deviceNum].DeviceState, 0);
@@ -273,7 +273,8 @@ NTSTATUS KeystoneEvtDeviceReleaseHardware(
 
 	PIU_DEVICE dev = DeviceGetContext(Device);
 
-	if (dev->WDMIsInitialized)
+	//close wdm handle
+	if (dev->WDMIsInitialized) 
 		USBD_CloseHandle(dev->WDM.Handle);
 	RtlZeroMemory(&dev->WDM, sizeof(dev->WDM));
 	dev->WDMIsInitialized = FALSE;

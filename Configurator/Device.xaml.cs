@@ -24,7 +24,7 @@ namespace Configurator
             this.InitializeComponent();
 
             m_deviceInd = deviceIndex;
-            m_parentMessenger = parentMessenger;
+            m_messenger = parentMessenger;
             m_deviceMode = parentMessenger.GetAppleMode(m_deviceInd);
             SetConfiguration(parentMessenger.GetConfiguration(m_deviceInd));
 
@@ -82,9 +82,9 @@ namespace Configurator
 
         private void SetConfiguration(int configNum)
         {
-            m_parentMessenger.SetConfiguration(m_deviceInd, configNum);
+            m_messenger.SetConfiguration(m_deviceInd, configNum);
 
-            Debug.WriteLine("Set configuration to " + configNum);
+            Debug.WriteLine("[IUGUI] Set configuration to " + configNum);
 
             m_deviceConfig = configNum;
 
@@ -105,7 +105,7 @@ namespace Configurator
             }
         }
 
-        private Messenger m_parentMessenger;
+        private Messenger m_messenger;
         private int m_deviceInd;
         private int m_deviceMode;
         private int m_deviceConfig;

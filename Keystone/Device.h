@@ -10,13 +10,11 @@
 //Device extension
 typedef struct _IU_DEVICE {
 	WDFDEVICE Self;
-	WCHAR Udid[IU_MAX_UDID_LENGTH];
 	WDFDRIVER Driver;
-	WDFUSBDEVICE Handle; //this even gonna be used? can't set alternate configurations with it...
-	USB_DEVICE_DESCRIPTOR DeviceDescriptor;
-	UCHAR DeviceNum;
-	BOOLEAN WDMIsInitialized;
+	USHORT DeviceNum;
 
+	WCHAR Udid[IU_MAX_UDID_LENGTH];
+	USB_DEVICE_DESCRIPTOR DeviceDescriptor;
 	APPLE_CONNECTION_MODE AppleMode;
 
 	struct {
@@ -42,11 +40,12 @@ typedef struct _IU_DEVICE {
 			UCHAR _Reserved; //unused, here to match USBD_INTERFACE_INFORMATION
 			USBD_INTERFACE_HANDLE InterfaceHandle;
 			ULONG NumberOfPipes;
-			USBD_PIPE_INFORMATION Pipes[IU_MAX_NUMBER_OF_ENDPOINTS_PER_INTERFACE];
-		} Interfaces[IU_MAX_INTERFACE_NUMBER + 1];
+			USBD_PIPE_INFORMATION Pipes[IU_MAX_NUMBER_OF_ENDPOINTS_PER_INTERFACE]; 
+		} Interfaces[IU_MAX_INTERFACE_NUMBER + 1]; //by number
 	} Config;
 
 	volatile LONG ReadyForControl;
+	BOOLEAN WDMIsInitialized;
 } IU_DEVICE, * PIU_DEVICE, DEVICE_CONTEXT, * PDEVICE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, DeviceGetContext);

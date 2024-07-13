@@ -4,7 +4,7 @@
 
 #define EXPORT __declspec(dllexport)
 
-#define MSG_DEBUG(...) {WCHAR cad[512]; _snwprintf(cad, 500, __VA_ARGS__); OutputDebugString(cad);}
+#define MSG_DEBUG(...) {WCHAR cad[512]; swprintf_s(cad, 512, __VA_ARGS__); OutputDebugString(cad);}
 
 typedef struct _MESSENGER_DEVICE_CONTEXT {
 	HCMNOTIFICATION HandleNotifications;

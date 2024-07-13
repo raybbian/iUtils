@@ -27,7 +27,7 @@ namespace Configurator
 {
     public sealed partial class MainWindow : Window
     {
-        public MainWindow()
+        public MainWindow(Messenger messenger)
         {
             this.InitializeComponent();
 
@@ -50,7 +50,7 @@ namespace Configurator
 
             m_oldWndProc = SetWndProc(WndProc);
 
-            m_messenger = new Messenger();
+            m_messenger = messenger;
             int devices = m_messenger.GetDevices();
             for (int i = 0; i < Messenger.IU_MAX_NUMBER_OF_DEVICES; i++)
             {

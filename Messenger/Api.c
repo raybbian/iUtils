@@ -7,24 +7,24 @@ PMESSENGER_CONTEXT WINAPI MSGInit() {
 	CONFIGRET ret = CR_SUCCESS;
 	PMESSENGER_CONTEXT MSGContext = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(MESSENGER_CONTEXT));
 	if (MSGContext == NULL) {
-		MSG_DEBUG(L"[IU] Failed to allocate memory for MSG context\n");
+		MSG_DEBUG(L"[IUMSG] Failed to allocate memory for MSG context\n");
 		goto Error;
 	}
 
 	ret = RegisterInterfaceNotifications(MSGContext);
 	if (ret != CR_SUCCESS) {
-		MSG_DEBUG(L"[IU] Failed to register for interface notifications\n");
+		MSG_DEBUG(L"[IUMSG] Failed to register for interface notifications\n");
 		goto Error;
 	}
 
 	//add current devices
 	ret = RetrieveExistingDevices(MSGContext);
 	if (ret != CR_SUCCESS) {
-		MSG_DEBUG(L"[IU] Failed to retrieve and add existing devices\n");
+		MSG_DEBUG(L"[IUMSG] Failed to retrieve and add existing devices\n");
 		goto Error;
 	}
 
-	MSG_DEBUG(L"[IU] MSGInit success\n");
+	MSG_DEBUG(L"[IUMSG] MSGInit success\n");
 	goto Cleanup;
 Error:
 	if (MSGContext) {
@@ -41,7 +41,7 @@ LONG WINAPI MSGGetDevices(
 	IN PMESSENGER_CONTEXT MSGContext
 ) {
 	if (MSGContext == NULL) {
-		MSG_DEBUG(L"[IU] Bad MSG Context\n");
+		MSG_DEBUG(L"[IUMSG] Bad MSG Context\n");
 		return -MSG_FAILURE;
 	}
 	LONG deviceFlags = 0;
@@ -57,7 +57,7 @@ LONG WINAPI MSGGetAppleMode(
 	IN PMESSENGER_CONTEXT MSGContext,
 	IN LONG DeviceInd
 ) {
-	MSG_DEBUG(L"[IU] GetAppleMode %d\n", DeviceInd);
+	MSG_DEBUG(L"[IUMSG] GetAppleMode %d\n", DeviceInd);
 
 	UCHAR appleMode = 0;
 	BOOLEAN success = SendDeviceIoctl(MSGContext, DeviceInd, IU_IOCTL_GET_MODE, NULL, 0, &appleMode, sizeof(appleMode));
@@ -69,7 +69,7 @@ LONG WINAPI MSGGetConfiguration(
 	IN PMESSENGER_CONTEXT MSGContext,
 	IN LONG DeviceInd
 ) {
-	MSG_DEBUG(L"[IU] GetConfiguration %d\n", DeviceInd);
+	MSG_DEBUG(L"[IUMSG] GetConfiguration %d\n", DeviceInd);
 
 	UCHAR configuration = 0;
 	BOOLEAN success = SendDeviceIoctl(MSGContext, DeviceInd, IU_IOCTL_GET_CONFIGURATION, NULL, 0, &configuration, sizeof(configuration));
@@ -82,7 +82,7 @@ MSG_STATUS WINAPI MSGSetConfiguration(
 	IN LONG DeviceInd,
 	IN LONG Configuration
 ) {
-	MSG_DEBUG(L"[IU] Set Configuration for %d to %d\n", DeviceInd, Configuration);
+	MSG_DEBUG(L"[IUMSG] Set Configuration for %d to %d\n", DeviceInd, Configuration);
 
 	UCHAR tmpConfiguration = (UCHAR)Configuration;
 	BOOLEAN success = SendDeviceIoctl(MSGContext, DeviceInd, IU_IOCTL_SET_CONFIGURATION, &tmpConfiguration, sizeof(tmpConfiguration), NULL, 0);
@@ -92,7 +92,7 @@ MSG_STATUS WINAPI MSGSetConfiguration(
 
 VOID WINAPI MSGClose(IN PMESSENGER_CONTEXT MSGContext) {
 	if (!MSGContext) {
-		MSG_DEBUG(L"[IU] Called MSGClose with NULL MSGContext\n");
+		MSG_DEBUG(L"[IUMSG] Called MSGClose with NULL MSGContext\n");
 		return;
 	}
 
@@ -102,8 +102,8 @@ VOID WINAPI MSGClose(IN PMESSENGER_CONTEXT MSGContext) {
 	//cleanup other context attributes
 	CONFIGRET ret = CM_Unregister_Notification(MSGContext->InterfaceNotification);
 	if (ret != CR_SUCCESS) {
-		MSG_DEBUG(L"[IU] Could not unregister interface notifications, closing anyway\n");
+		MSG_DEBUG(L"[IUMSG] Could not unregister interface notifications, closing anyway\n");
 	}
 	HeapFree(GetProcessHeap(), 0, MSGContext);
-	MSG_DEBUG(L"[IU] Closed messenger");
+	MSG_DEBUG(L"[IUMSG] Closed messenger\n");
 }

@@ -16,6 +16,7 @@
 #include <initguid.h>
 #include <stdlib.h>
 #include <devioctl.h>
+#include <stdio.h>
 #include "../Keystone/Public.h"
 #endif //PCH_H
 

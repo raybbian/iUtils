@@ -1,6 +1,8 @@
 #pragma once
 
-//Must get and parse configuration like this because wdf doesn't even have wdm shit
+NTSTATUS FillDeviceDescriptor(
+	IN PIU_DEVICE Dev
+);
 
 NTSTATUS GetCurrentConfiguration(
 	IN PIU_DEVICE Dev,
