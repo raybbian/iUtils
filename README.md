@@ -2,16 +2,20 @@
 
 This is a collection of tools to chip away at Apple's walled garden, exposing and utilizing hidden USB interfaces to provide user functionality.
 
+## How Do I Use This?
+
+Please see the alpha [releases](https://github.com/raybbian/iUtils/releases/tag/Alpha).
+
 ## Drivers
 
 ### Keystone Driver
 
 As its name suggests, this driver is the keystone of the project. Its roles and responsibilities are as follows:
 
-1. _[COMPLETE]_ **Communicate with the USB stack below**: Send internal device control IRPs to the USB host controller. This is done to get device descriptors, configuration descriptors, set the device configuration, as well as send vendor specific URB's enable the device's hidden modes.
-2. _[IN PROGRESS]_ **User configuration and request handling**: Handle IOCTL requests to the FDO from the user mode app that allow the user to select configurations, device modes, and control other aspects of the device - these messages are validated and sent to the USB stack below.
-3. _[IN PROGRESS]_ **Core driver functionality**: Handle the enumeration of the device's interfaces (grouped by function), and create a PDO (physical device object) for each of them. Each of these PDO's are initialized with information that allow Microsoft to choose drivers for this interface.
-4. _[COMPLETE]_ **Communicate with the USB stack above**: Handle IOCTL requests to the child PDO's from drivers above, including responding to URB's that request for device descriptors, such that the drivers for these functions operate normally.
+1. **Communicate with the USB stack below**: Send internal device control IRPs to the USB host controller. This is done to get device descriptors, configuration descriptors, set the device configuration, as well as send vendor specific URB's enable the device's hidden modes.
+2. **User configuration and request handling**: Handle IOCTL requests to the FDO from the user mode app that allow the user to select configurations, device modes, and control other aspects of the device - these messages are validated and sent to the USB stack below.
+3. **Core driver functionality**: Handle the enumeration of the device's interfaces (grouped by function), and create a PDO (physical device object) for each of them. Each of these PDO's are initialized with information that allow Microsoft to choose drivers for this interface.
+4. **Communicate with the USB stack above**: Handle IOCTL requests to the child PDO's from drivers above, including responding to URB's that request for device descriptors, such that the drivers for these functions operate normally.
 
 ### Valeria Driver
 
@@ -23,14 +27,15 @@ This driver will be implemented to allow users to see their iDevice screen in th
 
 This is the user application that will allow the user to:
 
-1. Install the driver to the device (using [libwdi](https://github.com/pbatard/libwdi)).
-2. Configure the iDevice's USB configuration.
-3. Enable or disable specific functions (PTP/iTunes/Valeria/CDC NCM) depending on the configurations.
-4. View stats and information about the device such as transfer rate, charging speed, etc.
+1. **[INCOMPLETE]** Install the driver to the device (using [libwdi](https://github.com/pbatard/libwdi)).
+    - Note: this will require me to sign my driver (needs $$$).
+2. **[COMPLETE]** Configure the iDevice's USB configuration.
+3. **[INCOMPLETE]** Enable or disable specific functions (PTP/iTunes/Valeria/CDC NCM) depending on the configurations.
+4. **[INCOMPLETE]** View stats and information about the device such as transfer rate, charging speed, etc.
 
 ### Messenger
 
-This is a DLL that will allow you to access the API for the Keystone driver through code, to integrate into your application.
+This is a DLL that will allow you to access the API for the Keystone driver through code, to integrate into your application. No documentation quite yet, but check out the [API header](https://github.com/raybbian/iUtils/blob/master/Messenger/Api.h) for its functions.
 
 ## What iUtilities Offers
 
