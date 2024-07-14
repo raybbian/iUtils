@@ -79,6 +79,34 @@ NTSTATUS KeystoneCreateDevice(
 		return status;
 	}
 
+	//find and initialize device in device store
+	PIU_DEVICE_STORE deviceStore = DriverGetContext(dev->Driver);
+	LONG deviceNum = -1;
+	for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
+		if (wcsncmp(deviceStore->Devices[i].Udid, dev->Udid, IU_MAX_UDID_LENGTH) == 0) {
+			LOG_INFO("Device was reconnected");
+			deviceNum = i;
+			break;
+		}
+	}
+	if (deviceNum == -1) {
+		LOG_INFO("Device is new connection");
+		for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
+			if (wcsnlen(deviceStore->Devices[i].Udid, IU_MAX_UDID_LENGTH) == 0) {
+				LOG_INFO("Found spot for device");
+				deviceNum = i;
+				wcscpy_s(deviceStore->Devices[i].Udid, IU_MAX_UDID_LENGTH, dev->Udid);
+				deviceStore->Devices[i].DesiredMode = APPLE_MODE_BASE_NETWORK_TETHER_VALERIA;
+				break;
+			}
+		}
+	}
+	if (deviceNum == -1) { 
+		LOG_ERROR("Too many devices attached to this driver!");
+		return STATUS_UNSUCCESSFUL;
+	}
+	dev->DeviceNum = (UCHAR)deviceNum;
+
 	//TODO: WMI registration?
 
 	return status;
@@ -144,68 +172,11 @@ NTSTATUS KeystoneEvtDeviceD0Entry(
 	PIU_DEVICE dev = DeviceGetContext(Device);
 	LOG_INFO("%ws Entering D0", dev->Udid);
 
-	//find and initialize device in device store
-	PIU_DEVICE_STORE deviceStore = DriverGetContext(dev->Driver);
-	LONG deviceNum = -1;
-	for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
-		if (wcscmp(deviceStore->Devices[i].Udid, dev->Udid) == 0) {
-			LOG_INFO("Device was reconnected");
-			deviceNum = i;
-			break;
-		}
-	}
-	if (deviceNum == -1) {
-		LOG_INFO("Device is new connection");
-		for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
-			if (InterlockedAdd(&deviceStore->Devices[i].DeviceState, 0) == IU_DEVICE_DISCONNECTED) {
-				LOG_INFO("Found spot for device");
-				deviceNum = i;
-				wcscpy(deviceStore->Devices[i].Udid, dev->Udid);
-				break;
-			}
-		}
-	}
-	if (deviceNum == -1) {
-		LOG_ERROR("Too many devices attached to this driver!");
-		return STATUS_UNSUCCESSFUL;
-	}
-	dev->DeviceNum = (UCHAR)deviceNum;
-
 	//get the device descriptor
 	status = FillDeviceDescriptor(dev);
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Failed to get device descriptor");
 		return status;
-	}
-
-	//set the device into the best possible apple mode
-	IU_DEVICE_STATE prevState = InterlockedAdd(&deviceStore->Devices[deviceNum].DeviceState, 0);
-	if (prevState == IU_DEVICE_DISCONNECTED) {
-		LOG_INFO("First enabling super network mode (4)");
-		status = SetAppleMode(dev, 4);
-		if (NT_SUCCESS(status)) {
-			InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA);
-			return STATUS_SUCCESS;
-		} 
-		LOG_INFO("Couldn't set super network mode, enabling regular network mode");
-		status = SetAppleMode(dev, 3);
-		if (NT_SUCCESS(status)) {
-			InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA);
-			return STATUS_SUCCESS;
-		} 
-		LOG_INFO("Couldn't set regular network mode, confinuing in initial mode");
-		InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA);
-	}
-	// refresh prev state in case above continues in regular mode, try to get valeria still
-	prevState = InterlockedAdd(&deviceStore->Devices[deviceNum].DeviceState, 0);
-	if (prevState == IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA) {
-		LOG_INFO("Adding valeria functionality");
-		status = SetAppleMode(dev, 2);
-		if (NT_SUCCESS(status)) {
-			InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_AWAITING_RECONNECT);
-			return STATUS_SUCCESS;
-		}
-		LOG_INFO("Couldn't add valeria function");
 	}
 
 	// Get current apple mode
@@ -216,14 +187,48 @@ NTSTATUS KeystoneEvtDeviceD0Entry(
 	}
 	LOG_INFO("cur apple mode %d", curAppleMode);
 
+	//set the device into the best possible apple mode
+	PIU_DEVICE_STORE deviceStore = DriverGetContext(dev->Driver);
+	if (curAppleMode == deviceStore->Devices[dev->DeviceNum].DesiredMode) {
+		LOG_INFO("Device is set to correct mode, moving to configure device");
+		goto ConfigureDevice;
+	}
+
+	if (curAppleMode == 1) { //if haven't attempted to set first mode
+		LOG_INFO("First enabling super network mode (4)");
+		status = SetAppleMode(dev, APPLE_MODE_BASE_NETWORK_TETHER);
+		if (NT_SUCCESS(status)) {
+			return STATUS_SUCCESS;
+		} 
+
+		LOG_INFO("Couldn't set super network mode, enabling regular network mode");
+		deviceStore->Devices[dev->DeviceNum].DesiredMode = APPLE_MODE_BASE_NETWORK_VALERIA;
+		status = SetAppleMode(dev, APPLE_MODE_BASE_NETWORK);
+		if (NT_SUCCESS(status)) {
+			return STATUS_SUCCESS;
+		} 
+
+		LOG_INFO("Couldn't set regular network mode, confinuing in initial mode");
+		deviceStore->Devices[dev->DeviceNum].DesiredMode = APPLE_MODE_BASE_VALERIA;
+	}
+
+	if (curAppleMode == 3 || curAppleMode == 4 || curAppleMode == 1) {
+		LOG_INFO("Adding valeria functionality");
+		status = SetAppleMode(dev, 2);
+		if (NT_SUCCESS(status)) {
+			return STATUS_SUCCESS;
+		}
+		LOG_INFO("Couldn't add valeria function");
+		deviceStore->Devices[dev->DeviceNum].DesiredMode = curAppleMode;
+	}
+
+ConfigureDevice:
 	//set configuration mode
-	status = SetConfigurationByValue(dev, 6);
+	status = SetConfigurationByValue(dev, BestConfigurationForMode(dev->AppleMode));
 	if (!NT_SUCCESS(status)) {
 		LOG_ERROR("Failed to set configuration");
 		return status;
 	}
-
-	InterlockedExchange(&deviceStore->Devices[deviceNum].DeviceState, IU_DEVICE_OPERATIONAL);
 
 	//create interface for talking with user app
 	status = WdfDeviceCreateDeviceInterface(
@@ -257,7 +262,6 @@ NTSTATUS KeystoneEvtDeviceD0Entry(
 	//	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "\n");
 	//}
 
-
 	return status;
 }
 
@@ -272,15 +276,6 @@ NTSTATUS KeystoneEvtDeviceD0Exit(
 
 	WdfDeviceSetDeviceInterfaceState(Device, &GUID_DEVINTERFACE_Keystone, NULL, FALSE);
 
-	IU_DEVICE_STATE curState = InterlockedAdd(&deviceStore->Devices[Dev->DeviceNum].DeviceState, 0);
-	//if was awaiting reconnect, then do not delete from store
-	if (curState == IU_DEVICE_AWAITING_RECONNECT || curState == IU_DEVICE_AWAITING_RECONNECT_PENDING_VALERIA) {
-		LOG_INFO("Device is reconnecting, not marking disc");
-		return STATUS_SUCCESS;
-	}
-
-	RtlZeroMemory(&deviceStore->Devices[Dev->DeviceNum], sizeof(deviceStore->Devices[Dev->DeviceNum]));
-	LOG_INFO("Marking device as disconnected");
 	return STATUS_SUCCESS;
 }
 

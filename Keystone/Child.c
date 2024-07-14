@@ -272,7 +272,7 @@ VOID ActivateChildren(
 ) {
 	WDFCHILDLIST ChildList = WdfFdoGetDefaultChildList(Dev->Self);
 	PIU_DEVICE_STORE deviceStore = DriverGetContext(Dev->Driver);
-	if (InterlockedAdd(&deviceStore->Devices[Dev->DeviceNum].DeviceState, 0) != IU_DEVICE_OPERATIONAL) {
+	if (Dev->AppleMode != deviceStore->Devices[Dev->DeviceNum].DesiredMode) {
 		LOG_INFO("Device not operational yet, cancelling scan");
 		return;
 	}

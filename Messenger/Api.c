@@ -72,7 +72,7 @@ LONG WINAPI MSGGetDevices(
 	}
 	LONG deviceFlags = 0;
 	for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
-		if (MSGContext->Devices[i].SymbolicLink != NULL) {
+		if (wcsnlen(MSGContext->Devices[i].SymbolicLink, MSG_MAX_SYMLINK_LENGTH) != 0) {
 			deviceFlags |= (1 << i);
 		}
 	}

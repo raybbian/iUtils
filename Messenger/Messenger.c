@@ -23,11 +23,15 @@ CONFIGRET AddDevice(
 	}
 
 	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext = &MSGContext->Devices[ind];
-	SIZE_T linkLen = wcslen(SymbolicLink);
+	SIZE_T linkLen = wcsnlen(SymbolicLink, MSG_MAX_SYMLINK_LENGTH);
 	MSGDeviceContext->DeviceInd = (UCHAR)ind;
 	MSGDeviceContext->ParentContext = MSGContext;
 	// fill Symbolic Link
-	MSGDeviceContext->SymbolicLink = SymbolicLink;
+	if (linkLen >= MSG_MAX_SYMLINK_LENGTH - 1) {
+		MSG_DEBUG(L"[IUMSG] Device Symlink too large");
+		return CR_BUFFER_SMALL;
+	}
+	wcscpy_s(MSGDeviceContext->SymbolicLink, MSG_MAX_SYMLINK_LENGTH, SymbolicLink);
 
 	//init lock
 	InitializeCriticalSection(&MSGDeviceContext->Lock);
@@ -139,12 +143,6 @@ VOID RemoveDevice( //CALLED OUTSIDE OF USB HANDLE CALLBACK
 		MSGDeviceContext->LockInitialized = FALSE;
 	}
 
-	// free symlink string
-	if (MSGDeviceContext->SymbolicLink) {
-		MSG_DEBUG(L"[IUMSG] Freeing device symlink\n");
-		MSGDeviceContext->SymbolicLink = NULL;
-	}
-
 	// reset ShouldRegister
 	memset(MSGDeviceContext, 0, sizeof(MESSENGER_DEVICE_CONTEXT));
 }
@@ -253,7 +251,7 @@ DWORD WINAPI USBInterfaceCallback( // when devices added or removed
 		AddDevice(MSGContext, symbolicLink, TRUE);
 		break;
 	case CM_NOTIFY_ACTION_DEVICEINTERFACEREMOVAL:
-		MSG_DEBUG(L"[IUMSG] Removing device...\n");
+		MSG_DEBUG(L"[IUMSG] Removing device %ws\n", symbolicLink);
 		if (deviceInd == -1) {
 			MSG_DEBUG(L"[IUMSG] Device to be removed not found!\n");
 			goto Cleanup;
@@ -283,34 +281,38 @@ CONFIGRET RetrieveExistingDevices(
 	CONFIGRET ret;
 
 	LONG reqLen = 0;
-	ret = CM_Get_Device_Interface_List_Size(
-		&reqLen,
-		&GUID_DEVINTERFACE_Keystone,
-		NULL,
-		CM_GET_DEVICE_INTERFACE_LIST_PRESENT
-	);
-	if (ret != CR_SUCCESS) {
-		MSG_DEBUG(L"[IUMSG] Failed to get interface list size\n");
-		return ret;
-	}
-	MSG_DEBUG(L"[IUMSG] Interface list size is %d\n", reqLen);
+	PWSTR buf = NULL;
+	do {
+		ret = CM_Get_Device_Interface_List_Size(
+			&reqLen,
+			&GUID_DEVINTERFACE_Keystone,
+			NULL,
+			CM_GET_DEVICE_INTERFACE_LIST_PRESENT
+		);
+		if (ret != CR_SUCCESS) {
+			MSG_DEBUG(L"[IUMSG] Failed to get interface list size\n");
+			break;
+		}
+		MSG_DEBUG(L"[IUMSG] Interface list size is %d\n", reqLen);
 
-	PWCHAR buf = HeapAlloc(MSGContext->Heap, HEAP_ZERO_MEMORY, reqLen);
-	if (buf == NULL) {
-		MSG_DEBUG(L"[IUMSG] Failed to allocate memory for interface list\n");
-		return CR_OUT_OF_MEMORY;
-	}
+		buf = HeapAlloc(MSGContext->Heap, HEAP_ZERO_MEMORY, reqLen * sizeof(WCHAR));
+		if (buf == NULL) {
+			MSG_DEBUG(L"[IUMSG] Failed to allocate memory for interface list\n");
+			ret = CR_OUT_OF_MEMORY;
+			break;
+		}
 
-	ret = CM_Get_Device_Interface_ListW(
-		&GUID_DEVINTERFACE_Keystone,
-		NULL,
-		buf,
-		reqLen,
-		CM_GET_DEVICE_INTERFACE_LIST_PRESENT
-	);
+		ret = CM_Get_Device_Interface_List(
+			&GUID_DEVINTERFACE_Keystone,
+			NULL,
+			buf,
+			reqLen,
+			CM_GET_DEVICE_INTERFACE_LIST_PRESENT
+		);
+	} while (ret == CR_BUFFER_SMALL);
+
 	if (ret != CR_SUCCESS) {
-		MSG_DEBUG(L"[IUMSG] Failed to get full interface list\n");
-		return ret;
+		goto Cleanup;
 	}
 
 	PWCHAR curChar = buf;
@@ -326,6 +328,9 @@ CONFIGRET RetrieveExistingDevices(
 		reqLen -= strLen + 1;
 	}
 
+Cleanup:
+	if (buf)
+		HeapFree(MSGContext->Heap, 0, buf);
 	return ret;
 }
 

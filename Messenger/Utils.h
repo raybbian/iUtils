@@ -6,6 +6,8 @@
 
 #define MSG_DEBUG(...) {WCHAR cad[512]; swprintf_s(cad, 511, __VA_ARGS__); OutputDebugString(cad);}
 
+#define MSG_MAX_SYMLINK_LENGTH 100
+
 struct _MESSENGER_CONTEXT;
 
 typedef struct _MESSENGER_DEVICE_CONTEXT {
@@ -14,7 +16,7 @@ typedef struct _MESSENGER_DEVICE_CONTEXT {
 	CRITICAL_SECTION Lock;
 	PTP_WORK pWork;
 
-	PWCHAR SymbolicLink;
+	WCHAR SymbolicLink[MSG_MAX_SYMLINK_LENGTH];
 	struct _MESSENGER_CONTEXT* ParentContext;
 	BOOLEAN ShouldUnregister; //set to true from within callback context
 	BOOLEAN LockInitialized;
