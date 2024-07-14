@@ -23,17 +23,15 @@ CONFIGRET AddDevice(
 	}
 
 	PMESSENGER_DEVICE_CONTEXT MSGDeviceContext = &MSGContext->Devices[ind];
-	SIZE_T linkLen = wcslen(SymbolicLink);
+	SIZE_T linkLen = wcsnlen(SymbolicLink, MSG_MAX_SYMLINK_LENGTH);
 	MSGDeviceContext->DeviceInd = (UCHAR)ind;
 	MSGDeviceContext->ParentContext = MSGContext;
 	// fill Symbolic Link
-	MSGDeviceContext->SymbolicLink = HeapAlloc(GetProcessHeap(), 0, (linkLen + 1) * sizeof(WCHAR));
-	if (!MSGDeviceContext->SymbolicLink) {
-		MSG_DEBUG(L"[IUMSG] Could not allocate memory for symbolic link string\n");
-		RemoveDevice(MSGDeviceContext, FALSE);
-		return CR_OUT_OF_MEMORY;
+	if (linkLen >= MSG_MAX_SYMLINK_LENGTH - 1) {
+		MSG_DEBUG(L"[IUMSG] Device Symlink too large");
+		return CR_BUFFER_SMALL;
 	}
-	wcscpy_s(MSGDeviceContext->SymbolicLink, linkLen, SymbolicLink);
+	wcscpy_s(MSGDeviceContext->SymbolicLink, MSG_MAX_SYMLINK_LENGTH, SymbolicLink);
 
 	//init lock
 	InitializeCriticalSection(&MSGDeviceContext->Lock);
@@ -86,7 +84,7 @@ CONFIGRET AddDevice(
 
 	MSG_DEBUG(L"[IUMSG] Successfully added device %ws\n", SymbolicLink);
 	if (CallCallback && MSGContext->DeviceAddCallback != NULL) {
-		MSG_DEBUG(L"[IUMSG] Calling add device callback");
+		MSG_DEBUG(L"[IUMSG] Calling add device callback\n");
 		MSGContext->DeviceAddCallback(MSGDeviceContext->DeviceInd);
 	}
 
@@ -108,21 +106,29 @@ VOID RemoveDevice( //CALLED OUTSIDE OF USB HANDLE CALLBACK
 	if (MSGDeviceContext->DeviceHandle) {
 		MSG_DEBUG(L"[IUMSG] Closing device handle");
 		CloseHandle(MSGDeviceContext->DeviceHandle);
+		MSGDeviceContext->DeviceHandle = NULL;
 	}
 
 	// unregister for notifs, if was marked by callback to unregister, let it do that
 	if (MSGDeviceContext->HandleNotifications) {
-		MSG_DEBUG(L"[IUMSG] Unregistering notifications\n");
-		BOOL callbackUnregister = FALSE;
+		MSG_DEBUG(L"[IUMSG] Unregistering notifications from remove device\n");
+
+		BOOL callbackUnregister = TRUE;
+
 		EnterCriticalSection(&MSGDeviceContext->Lock);
-		if (MSGDeviceContext->ShouldUnregister)
-			callbackUnregister = TRUE;
+
+		if (!MSGDeviceContext->ShouldUnregister) { 
+			CM_Unregister_Notification(MSGDeviceContext->HandleNotifications);
+			MSGDeviceContext->HandleNotifications = NULL;
+			MSGDeviceContext->ShouldUnregister = FALSE;
+			callbackUnregister = FALSE;
+		}
+
 		LeaveCriticalSection(&MSGDeviceContext->Lock);
 
-		if (!callbackUnregister)
-			CM_Unregister_Notification(MSGDeviceContext->HandleNotifications);
-		else  //pWork init before handle notifs, can't be null
+		if (callbackUnregister) {
 			WaitForThreadpoolWorkCallbacks(MSGDeviceContext->pWork, FALSE);
+		}
 	}
 
 	// close work thread pool
@@ -135,12 +141,6 @@ VOID RemoveDevice( //CALLED OUTSIDE OF USB HANDLE CALLBACK
 	if (MSGDeviceContext->LockInitialized) {
 		DeleteCriticalSection(&MSGDeviceContext->Lock);
 		MSGDeviceContext->LockInitialized = FALSE;
-	}
-
-	// free symlink string
-	if (MSGDeviceContext->SymbolicLink) {
-		MSG_DEBUG(L"[IUMSG] Freeing device symlink\n");
-		HeapFree(GetProcessHeap(), 0, MSGDeviceContext->SymbolicLink);
 	}
 
 	// reset ShouldRegister
@@ -161,22 +161,30 @@ DWORD WINAPI USBHandleCallback(
 	switch (Action) {
 	case CM_NOTIFY_ACTION_DEVICEQUERYREMOVE:
 		MSG_DEBUG(L"[IUMSG] Handling device query remove\n");
-		if (MSGDeviceContext->DeviceHandle)
+		if (MSGDeviceContext->DeviceHandle) {
+			MSG_DEBUG(L"[IUMSG] Unregistering notifications from queryremove\n");
 			CloseHandle(MSGDeviceContext->DeviceHandle);
+			MSGDeviceContext->DeviceHandle = NULL;
+		}
 		break;
 	case CM_NOTIFY_ACTION_DEVICEQUERYREMOVEFAILED:
 		//unregister and wait
 		MSG_DEBUG(L"[IUMSG] Handling device query remove failed\n");
 		if (MSGDeviceContext->HandleNotifications) {
+			MSG_DEBUG(L"[IUMSG] Unregistering notifications from queryremovefailed\n");
 			UnregisterDeviceFromHandleCallbackContext(MSGDeviceContext);
 			WaitForThreadpoolWorkCallbacks(MSGDeviceContext->pWork, FALSE);
 		}
 
 		// close old handle
-		if (MSGDeviceContext->DeviceHandle)
+		if (MSGDeviceContext->DeviceHandle) {
+			MSG_DEBUG(L"[IUMSG] Closing device handle from queryremovefailed\n");
 			CloseHandle(MSGDeviceContext->DeviceHandle);
+			MSGDeviceContext->DeviceHandle = NULL;
+		}
 
 		// Open device handle again
+		MSG_DEBUG(L"[IUMSG] Opening device handle from queryremovefailed\n");
 		MSGDeviceContext->DeviceHandle = CreateFile(
 			MSGDeviceContext->SymbolicLink,
 			GENERIC_READ,
@@ -192,6 +200,7 @@ DWORD WINAPI USBHandleCallback(
 		}
 
 		// re-register notifications
+		MSG_DEBUG(L"[IUMSG] Registering notifications from queryremovefailed\n");
 		CM_NOTIFY_FILTER filter = { 0 };
 		filter.cbSize = sizeof(filter);
 		filter.FilterType = CM_NOTIFY_FILTER_TYPE_DEVICEHANDLE;
@@ -205,6 +214,7 @@ DWORD WINAPI USBHandleCallback(
 		if (ret != CR_SUCCESS) {
 			MSG_DEBUG(L"[IUMSG] Failed to reregister for device handle notifications\n");
 			CloseHandle(MSGDeviceContext->DeviceHandle);
+			MSGDeviceContext->DeviceHandle = NULL;
 			goto Cleanup;
 		}
 		break;
@@ -212,8 +222,11 @@ DWORD WINAPI USBHandleCallback(
 	case CM_NOTIFY_ACTION_DEVICEREMOVECOMPLETE:
 		MSG_DEBUG(L"[IUMSG] Handling device remove action\n");
 		UnregisterDeviceFromHandleCallbackContext(MSGDeviceContext);
-		if (MSGDeviceContext->DeviceHandle)
+		if (MSGDeviceContext->DeviceHandle) {
+			MSG_DEBUG(L"[IUMSG] Closing device handle from device remove notification\n");
 			CloseHandle(MSGDeviceContext->DeviceHandle);
+			MSGDeviceContext->DeviceHandle = NULL;
+		}
 		break;
 	}
 Cleanup:
@@ -238,7 +251,7 @@ DWORD WINAPI USBInterfaceCallback( // when devices added or removed
 		AddDevice(MSGContext, symbolicLink, TRUE);
 		break;
 	case CM_NOTIFY_ACTION_DEVICEINTERFACEREMOVAL:
-		MSG_DEBUG(L"[IUMSG] Removing device...\n");
+		MSG_DEBUG(L"[IUMSG] Removing device %ws\n", symbolicLink);
 		if (deviceInd == -1) {
 			MSG_DEBUG(L"[IUMSG] Device to be removed not found!\n");
 			goto Cleanup;
@@ -268,34 +281,37 @@ CONFIGRET RetrieveExistingDevices(
 	CONFIGRET ret;
 
 	LONG reqLen = 0;
-	ret = CM_Get_Device_Interface_List_Size(
-		&reqLen,
-		&GUID_DEVINTERFACE_Keystone,
-		NULL,
-		CM_GET_DEVICE_INTERFACE_LIST_PRESENT
-	);
-	if (ret != CR_SUCCESS) {
-		MSG_DEBUG(L"[IUMSG] Failed to get interface list size\n");
-		return ret;
-	}
-	MSG_DEBUG(L"[IUMSG] Interface list size is %d\n", reqLen);
+	PWSTR buf = NULL;
+	do {
+		ret = CM_Get_Device_Interface_List_Size(
+			&reqLen,
+			&GUID_DEVINTERFACE_Keystone,
+			NULL,
+			CM_GET_DEVICE_INTERFACE_LIST_PRESENT
+		);
+		if (ret != CR_SUCCESS) {
+			MSG_DEBUG(L"[IUMSG] Failed to get interface list size\n");
+			break;
+		}
+		MSG_DEBUG(L"[IUMSG] Interface list size is %d\n", reqLen);
 
-	PWCHAR buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (reqLen + 1));
-	if (!buf) {
-		MSG_DEBUG(L"[IUMSG] Failed to allocate memory for interface list\n");
-		ret = CR_OUT_OF_MEMORY;
-		goto Cleanup;
-	}
+		buf = HeapAlloc(MSGContext->Heap, HEAP_ZERO_MEMORY, reqLen * sizeof(WCHAR));
+		if (buf == NULL) {
+			MSG_DEBUG(L"[IUMSG] Failed to allocate memory for interface list\n");
+			ret = CR_OUT_OF_MEMORY;
+			break;
+		}
 
-	ret = CM_Get_Device_Interface_List(
-		&GUID_DEVINTERFACE_Keystone,
-		NULL,
-		buf,
-		reqLen,
-		CM_GET_DEVICE_INTERFACE_LIST_PRESENT
-	);
+		ret = CM_Get_Device_Interface_List(
+			&GUID_DEVINTERFACE_Keystone,
+			NULL,
+			buf,
+			reqLen,
+			CM_GET_DEVICE_INTERFACE_LIST_PRESENT
+		);
+	} while (ret == CR_BUFFER_SMALL);
+
 	if (ret != CR_SUCCESS) {
-		MSG_DEBUG(L"[IUMSG] Failed to get full interface list\n");
 		goto Cleanup;
 	}
 
@@ -314,7 +330,7 @@ CONFIGRET RetrieveExistingDevices(
 
 Cleanup:
 	if (buf)
-		HeapFree(GetProcessHeap(), 0, buf);
+		HeapFree(MSGContext->Heap, 0, buf);
 	return ret;
 }
 

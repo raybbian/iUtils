@@ -5,11 +5,18 @@
 
 PMESSENGER_CONTEXT WINAPI MSGInit() {
 	CONFIGRET ret = CR_SUCCESS;
-	PMESSENGER_CONTEXT MSGContext = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(MESSENGER_CONTEXT));
+	PMESSENGER_CONTEXT MSGContext = NULL;
+	HANDLE heap = HeapCreate(0, 0, 0);
+	if (heap == NULL) {
+		MSG_DEBUG(L"[IUMSG] Failed to create heap for MSG");
+		goto Error;
+	}
+	MSGContext = HeapAlloc(heap, HEAP_ZERO_MEMORY, sizeof(MESSENGER_CONTEXT));
 	if (MSGContext == NULL) {
 		MSG_DEBUG(L"[IUMSG] Failed to allocate memory for MSG context\n");
 		goto Error;
 	}
+	MSGContext->Heap = heap;
 
 	ret = RegisterInterfaceNotifications(MSGContext);
 	if (ret != CR_SUCCESS) {
@@ -28,13 +35,17 @@ PMESSENGER_CONTEXT WINAPI MSGInit() {
 	goto Cleanup;
 Error:
 	if (MSGContext) {
-		if (MSGContext->InterfaceNotification)
+		if (MSGContext->InterfaceNotification) {
 			CM_Unregister_Notification(MSGContext->InterfaceNotification);
-		HeapFree(GetProcessHeap(), 0, MSGContext);
+			MSGContext->InterfaceNotification = NULL;
+		}
 		MSGContext = NULL;
 	}
+	if (heap) {
+		HeapDestroy(heap);
+	}
 	MSG_DEBUG(L"[IUMSG] Error initializing msg context")
-		Cleanup:
+Cleanup:
 	return MSGContext;
 }
 
@@ -61,7 +72,7 @@ LONG WINAPI MSGGetDevices(
 	}
 	LONG deviceFlags = 0;
 	for (LONG i = 0; i < IU_MAX_NUMBER_OF_DEVICES; i++) {
-		if (MSGContext->Devices[i].SymbolicLink != NULL) {
+		if (wcsnlen(MSGContext->Devices[i].SymbolicLink, MSG_MAX_SYMLINK_LENGTH) != 0) {
 			deviceFlags |= (1 << i);
 		}
 	}
@@ -116,9 +127,10 @@ VOID WINAPI MSGClose(IN PMESSENGER_CONTEXT MSGContext) {
 	}
 	//cleanup other context attributes
 	CONFIGRET ret = CM_Unregister_Notification(MSGContext->InterfaceNotification);
+	MSGContext->InterfaceNotification = NULL;
 	if (ret != CR_SUCCESS) {
 		MSG_DEBUG(L"[IUMSG] Could not unregister interface notifications, closing anyway\n");
 	}
-	HeapFree(GetProcessHeap(), 0, MSGContext);
+	HeapDestroy(MSGContext->Heap);
 	MSG_DEBUG(L"[IUMSG] Closed messenger\n");
 }

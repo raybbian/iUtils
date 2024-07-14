@@ -11,3 +11,4 @@ APPLE_CONNECTION_MODE GetAppleMode(
 	IN PIU_DEVICE Dev
 );
 
+UCHAR BestConfigurationForMode(APPLE_CONNECTION_MODE Mode);

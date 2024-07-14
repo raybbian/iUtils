@@ -156,6 +156,22 @@ Cleanup:
 	return out;
 }
 
+UCHAR BestConfigurationForMode(APPLE_CONNECTION_MODE Mode) {
+	switch (Mode) {
+	case APPLE_MODE_BASE_NETWORK_TETHER_VALERIA:
+	case APPLE_MODE_BASE_NETWORK_TETHER:
+		return 6;
+	case APPLE_MODE_BASE_NETWORK_VALERIA:
+	case APPLE_MODE_BASE_NETWORK:
+	case APPLE_MODE_BASE_VALERIA:
+		return 5;
+	case APPLE_MODE_BASE:
+		return 4;
+	default: 
+		return 1;
+	}
+}
+
 const unsigned char APPLE_MODE_CAPABILITIES[IU_NUMBER_OF_APPLE_MODES][IU_MAX_NUMBER_OF_CONFIGURATIONS + 1][IU_NUMBER_OF_FEATURES] = {
 	{ // APPLE_MODE_UNKNOWN
 		{0, 0, 0, 0, 0, 0}, 
