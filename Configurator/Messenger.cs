@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace Configurator
 {
-    public class Messenger : IDisposable
+    public class Messenger
     {
 
         public Messenger(DispatcherQueue dispatch)
@@ -26,26 +26,26 @@ namespace Configurator
 
         public void SetAddDeviceCallback(DeviceCallbackDelegate addDeviceCallback)
         {
-            MSGSetAddDeviceCallback(m_context, (int device) =>
+            m_addDeviceCallback = (int device) =>
             {
                 m_dispatch.TryEnqueue(() =>
                 {
                     addDeviceCallback(device);
                 });
-            });
-            m_addDeviceCallback = addDeviceCallback;
+            };
+            MSGSetAddDeviceCallback(m_context, m_addDeviceCallback);
         }
 
         public void SetRemoveDeviceCallback(DeviceCallbackDelegate removeDeviceCallback)
         {
-            MSGSetRemoveDeviceCallback(m_context, (int device) =>
+            m_removeDeviceCallback = (int device) =>
             {
                 m_dispatch.TryEnqueue(() =>
                 {
                     removeDeviceCallback(device);
                 });
-            });
-            m_removeDeviceCallback = removeDeviceCallback;
+            };
+            MSGSetRemoveDeviceCallback(m_context, m_removeDeviceCallback);
         }
 
         public int GetDevices()
@@ -107,39 +107,20 @@ namespace Configurator
             }
         }
 
-        private IntPtr m_context = IntPtr.Zero;
-        private DispatcherQueue m_dispatch;
-        private DeviceCallbackDelegate m_addDeviceCallback;
-        private DeviceCallbackDelegate m_removeDeviceCallback;
-
-        // ================== CLEANUP CODE =========================
-
-        protected virtual void Dispose(bool disposing)
+        public void Close()
         {
-            if (m_disposed) return;
-            Debug.WriteLine("[IUGUI] Trying to dispose");
             if (m_context != IntPtr.Zero)
             {
                 MSGClose(m_context);
                 m_context = IntPtr.Zero;
                 Debug.WriteLine("[IUGUI] Closed messenger");
             }
-            m_disposed = true;
         }
 
-        public void Dispose()
-        {
-            Dispose(true);
-
-            GC.SuppressFinalize(this);
-        }
-
-        ~Messenger()
-        {
-            Dispose(false);
-        }
-
-        private bool m_disposed;
+        private IntPtr m_context = IntPtr.Zero;
+        private DispatcherQueue m_dispatch;
+        private DeviceCallbackDelegate m_addDeviceCallback;
+        private DeviceCallbackDelegate m_removeDeviceCallback;
 
         // =========================== DLL_CONSTANTS ===============
         public static readonly int IU_MAX_NUMBER_OF_DEVICES = 8;

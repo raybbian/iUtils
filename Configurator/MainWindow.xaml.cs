@@ -46,7 +46,6 @@ namespace Configurator
 
             Canvas.Loaded += Canvas_Loaded;
 
-            m_presenter.IsAlwaysOnTop = true;
             m_presenter.IsResizable = false;
             m_presenter.IsMaximizable = false;
             m_presenter.IsMinimizable = false;

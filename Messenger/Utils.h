@@ -22,6 +22,7 @@ typedef struct _MESSENGER_DEVICE_CONTEXT {
 } MESSENGER_DEVICE_CONTEXT, *PMESSENGER_DEVICE_CONTEXT; 
 
 typedef struct _MESSENGER_CONTEXT {
+	HANDLE Heap;
 	HCMNOTIFICATION InterfaceNotification;
 	VOID(*DeviceAddCallback)(LONG);
 	VOID(*DeviceRemoveCallback)(LONG);

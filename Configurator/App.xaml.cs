@@ -43,7 +43,7 @@ namespace Configurator
 
         private void AppWindow_Destroying(Microsoft.UI.Windowing.AppWindow sender, object args)
         {
-            m_messenger.Dispose();
+            m_messenger.Close();
         }
 
         private Messenger m_messenger;
