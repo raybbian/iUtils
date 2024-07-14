@@ -37,7 +37,7 @@
                 </ResourceDictionary>
             </TabView.Resources>
             <TabView.TabStripHeader>
-                <TextBlock x:Name="DragRegionHeader" Text="iUtils Configurator" VerticalAlignment="Center" Padding="16, 8, 8, 8" Style="{ThemeResource BaseTextBlockStyle}" />
+                <TextBlock x:Name="DragRegionHeader" Text="iUtils Config" VerticalAlignment="Center" Padding="16, 8, 8, 8" Style="{ThemeResource BaseTextBlockStyle}" />
             </TabView.TabStripHeader>
             <TabView.TabStripFooter>
                 <Grid x:Name="DragRegionFooter" MinWidth="36"/>

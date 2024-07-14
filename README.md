@@ -4,7 +4,7 @@ This is a collection of tools to chip away at Apple's walled garden, exposing an
 
 ## How Do I Use This?
 
-Please see the alpha [releases](https://github.com/raybbian/iUtils/releases/tag/Alpha).
+Please see the alpha [releases](https://github.com/raybbian/iUtils/releases/).
 
 ## Drivers
 

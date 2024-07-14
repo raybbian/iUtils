@@ -34,7 +34,10 @@ namespace Configurator
 
             foreach (ToggleButton child in ConfigPanel.Children)
             {
-                child.Click += ConfigButton_Click;
+                if (child is ToggleButton configButton)
+                {
+                    configButton.Click += ConfigButton_Click;
+                }
             }
             foreach (var child in FeatureSelector.Children)
             {
@@ -71,10 +74,13 @@ namespace Configurator
                 button.IsChecked = true;
                 return;
             }
-            foreach (ToggleButton child in ConfigPanel.Children)
+            foreach (var child in ConfigPanel.Children)
             {
-                if (child.Equals(button)) continue;
-                child.IsChecked = false;
+                if (child is ToggleButton configButton)
+                {
+                    if (configButton.Equals(button)) continue;
+                    configButton.IsChecked = false;
+                }
             }
 
             int configNum = ConfigPanel.Children.IndexOf(button) + 1;
@@ -104,6 +110,10 @@ namespace Configurator
                     i++;
                 }
             }
+        }
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            _ = Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/raybbian/iUtils"));
         }
 
         private Messenger m_messenger;
