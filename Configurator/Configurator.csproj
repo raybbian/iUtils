@@ -15,7 +15,7 @@
 	<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
   <ItemGroup>
-    <None Remove="Device.xaml" />
+    <None Remove="DeviceControl.xaml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,7 +43,7 @@
     <ProjectCapability Include="Msix" />
   </ItemGroup>
   <ItemGroup>
-    <Page Update="Device.xaml">
+    <Page Update="DeviceControl.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>

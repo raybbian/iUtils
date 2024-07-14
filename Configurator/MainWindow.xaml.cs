@@ -84,18 +84,18 @@ namespace Configurator
         {
             DisplayArea displayArea = DisplayArea.GetFromWindowId(m_appWindow.Id, DisplayAreaFallback.Nearest);
             double scaleAdjustment = Canvas.XamlRoot.RasterizationScale;
-            int width = (int)Math.Round(576 * scaleAdjustment);
-            int height = (int)Math.Round(265 * scaleAdjustment);
-            int bottomPadding = (int)Math.Round(20 * scaleAdjustment);
-            int xCoord = (displayArea.WorkArea.Width - width) / 2;
-            int yCoord = (displayArea.WorkArea.Height - height - bottomPadding);
+            int width = (int)Math.Round(315 * scaleAdjustment);
+            int height = (int)Math.Round(315 * scaleAdjustment);
+            int padding = (int)Math.Round(20 * scaleAdjustment);
+            int xCoord = displayArea.WorkArea.Width - width - padding;
+            int yCoord = displayArea.WorkArea.Height - height - padding;
             m_appWindow.MoveAndResize(new Windows.Graphics.RectInt32(xCoord, yCoord, width, height));
         }
 
         private void CreateNewDeviceTab(int index)
         {
             TabViewItem newItem = new TabViewItem();
-            newItem.Header = "Apple Device " + index;
+            newItem.Header = "Device " + (index + 1);
             Device device = new Device(index, m_messenger);
             newItem.Content = device;
 
